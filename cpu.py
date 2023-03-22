@@ -34,16 +34,6 @@ class CPU:  # 8bit
 
         self.check_cb: bool = False
 
-        # shorten register names
-        # self.A = self.registers["A"]
-        # self.F = self.registers["F"]
-        # self.B = self.registers["B"]
-        # self.C = self.registers["C"]
-        # self.D = self.registers["D"]
-        # self.E = self.registers["E"]
-        # self.H = self.registers["H"]
-        # self.L = self.registers["L"]
-
     """
     16 means 16bit
     no number assums 8bit
@@ -55,16 +45,16 @@ class CPU:  # 8bit
         0x01: lambda cpu, m: cpu._ld_nn("B", "C", m),  # LD BC, nn
         0x02: lambda cpu, m: cpu._ld_to_16("B", "C", "A", m),  # LD (BC), A
         0x03: lambda cpu: cpu._inc_16("B", "C"),  # INC BC
-        0x04: lambda cpu: cpu._inc("B"),  # INC B
-        0x05: lambda cpu: cpu._dec("B"),  # DEC B
+        0x04: lambda cpu: cpu._inc(cpu.registers["B"]),  # INC B
+        0x05: lambda cpu: cpu._dec(cpu.registers["B"]),  # DEC B
         0x06: lambda cpu, m: cpu._ld_n("B", m),  # LD B, n
         0x07: lambda cpu: cpu._rlca(),  # RLCA # IMPLEMENT
         0x08: lambda cpu, m: cpu._ld_nn_sp(m),  # LD (nn), SP
         0x09: lambda cpu: cpu._add_16_16("H", "L", "B", "C"),  # ADD HL, BC
         0x0A: lambda cpu, m: cpu._ld_from_16("A", "B", "C", m),  # LD A, (BC)
         0x0B: lambda cpu: cpu._dec_16("B", "C"),  # DEC BC
-        0x0C: lambda cpu: cpu._inc("C"),  # INC C
-        0x0D: lambda cpu: cpu._dec("C"),  # DEC C
+        0x0C: lambda cpu: cpu._inc(cpu.registers["C"]),  # INC C
+        0x0D: lambda cpu: cpu._dec(cpu.registers["C"]),  # DEC C
         0x0E: lambda cpu, m: cpu._ld_n("C", m),  # LD C, n
 
         0x0F: lambda cpu: cpu._rrca(),  # RRCA # IMPLEMENT
@@ -73,8 +63,8 @@ class CPU:  # 8bit
         0x11: lambda cpu, m: cpu._ld_nn("D", "E", m),  # LD DE, nn
         0x12: lambda cpu, m: cpu._ld_to_16("D", "E", "A", m),  # LD (DE), A
         0x13: lambda cpu: cpu._inc_16("D", "E"),  # INC DE
-        0x14: lambda cpu: cpu._inc("D"),  # INC D
-        0x15: lambda cpu: cpu._dec("D"),  # DEC D
+        0x14: lambda cpu: cpu._inc(cpu.registers["D"]),  # INC D
+        0x15: lambda cpu: cpu._dec(cpu.registers["D"]),  # DEC D
         0x16: lambda cpu, m: cpu._ld_n("D", m),  # LD D, n
 
         0x17: lambda cpu: cpu._rla(),  # RLA # IMPLEMENT
@@ -83,8 +73,8 @@ class CPU:  # 8bit
         0x19: lambda cpu: cpu._add_16_16("H", "L", "D", "E"),  # ADD HL, DE
         0x1A: lambda cpu, m: cpu._ld_from_16("A", "D", "E", m),  # LD A, (DE)
         0x1B: lambda cpu: cpu._dec_16("D", "E"),  # DEC DE
-        0x1C: lambda cpu: cpu._inc("E"),  # INC E
-        0x1D: lambda cpu: cpu._dec("E"),  # DEC E
+        0x1C: lambda cpu: cpu._inc(cpu.registers["E"]),  # INC E
+        0x1D: lambda cpu: cpu._dec(cpu.registers["E"]),  # DEC E
         0x1E: lambda cpu, m: cpu._ld_n("E", m),  # LD E, n
 
         0x1F: lambda cpu: cpu._rra(),  # RRA # IMPLEMENT
@@ -93,16 +83,16 @@ class CPU:  # 8bit
         0x21: lambda cpu, m: cpu._ld_nn("H", "L", m),  # LD HL, nn
         0x22: lambda cpu, m: cpu._ldi_to_16("H", "L", "A", m),  # LDI (HL), A
         0x23: lambda cpu: cpu._inc_16("H", "L"),  # INC HL
-        0x24: lambda cpu: cpu._inc("H"),  # INC H
-        0x25: lambda cpu: cpu._dec("H"),  # DEC H
+        0x24: lambda cpu: cpu._inc(cpu.registers["H"]),  # INC H
+        0x25: lambda cpu: cpu._dec(cpu.registers["H"]),  # DEC H
         0x26: lambda cpu, m: cpu._ld_n("H", m),  # LD H, n
         0x27: lambda cpu: cpu._daa(),  # DAA # IMPLEMENT
         0x28: lambda cpu, m: cpu._jr_z_n(m),  # JR Z, n
         0x29: lambda cpu: cpu._add_16_16("H", "L", "H", "L"),  # ADD HL, HL
         0x2A: lambda cpu, m: cpu._ldi_from_16("A", "H", "L", m),  # LDI A, (HL)
         0x2B: lambda cpu: cpu._dec_16("H", "L"),  # DEC HL
-        0x2C: lambda cpu: cpu._inc("L"),  # INC L
-        0x2D: lambda cpu: cpu._dec("L"),  # DEC L
+        0x2C: lambda cpu: cpu._inc(cpu.registers["L"]),  # INC L
+        0x2D: lambda cpu: cpu._dec(cpu.registers["L"]),  # DEC L
         0x2E: lambda cpu, m: cpu._ld_n("L", m),  # LD L, n
 
         0x2F: lambda cpu: cpu._cpl(),  # CPL # IMPLEMENT
@@ -111,8 +101,12 @@ class CPU:  # 8bit
         0x31: lambda cpu, m: cpu._ld_sp_nn(m),  # LD SP, nn
         0x32: lambda cpu, m: cpu._ldd_to_16("H", "L", "A", m),  # LDD (HL), A
         0x33: lambda cpu: cpu._inc_pntrs("SP"),  # INC SP
-        0x34: lambda cpu, m: cpu._inc_16("H", "L", m),  # INC (HL)
-        0x35: lambda cpu, m: cpu._dec_16("H", "L", m),  # DEC (HL)
+        0x34: lambda cpu, m: cpu._inc(m.read_byte(
+            cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # INC (HL)
+        0x35: lambda cpu, m: cpu._dec_16(m.read_byte(
+            cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # DEC (HL)
         0x36: lambda cpu, m: cpu._ld_n_to_16("H", "L", m),  # LD (HL), n
 
         0x37: lambda cpu: cpu._scf(),  # SCF # IMPLEMENT
@@ -121,8 +115,8 @@ class CPU:  # 8bit
         0x39: lambda cpu: cpu._add_16_sp("H", "L"),  # ADD HL, SP
         0x3A: lambda cpu, m: cpu._ldd_from_16("A", "H", "L", m),  # LDD A, (HL)
         0x3B: lambda cpu: cpu._dec_pntrs("SP"),  # DEC SP
-        0x3C: lambda cpu: cpu._inc("A"),  # INC A
-        0x3D: lambda cpu: cpu._dec("A"),  # DEC A
+        0x3C: lambda cpu: cpu._inc(cpu.registers["A"]),  # INC A
+        0x3D: lambda cpu: cpu._dec(cpu.registers["A"]),  # DEC A
         0x3E: lambda cpu, m: cpu._ld_n("A", m),  # LD A, n
 
         0x3F: lambda cpu: cpu._ccf(),  # CCF # IMPLEMENT
@@ -276,7 +270,7 @@ class CPU:  # 8bit
         0xC8: lambda cpu, m: cpu._ret_z(m),  # RET Z
         0xC9: lambda cpu, m: cpu._ret(m),  # RET
         0xCA: lambda cpu, m: cpu._jp_z_nn(m),  # JP Z, nn
-        0xCB: lambda cpu, m: cpu._cb(m),  # CB prefix
+        0xCB: lambda cpu, m: cpu._cb(m.read_byte(cpu.PC + 1), m),  # CB prefix
         0xCC: lambda cpu, m: cpu._call_z_nn(m),  # CALL Z, nn
         0xCD: lambda cpu, m: cpu._call_nn(m),  # CALL nn
         0xCE: lambda cpu, m: cpu._adc_n("A", m),  # ADC A, n
@@ -335,8 +329,341 @@ class CPU:  # 8bit
     }
 
     cb_opcodes = {
-        0x00: lambda cpu: cpu._rlc(cpu.B),
-        0x01: lambda cpu, m: cpu._test_only(cpu.A, m)  # REMOVE
+        0x00: lambda cpu: cpu._rlc(cpu.registers["B"]),  # RLC B
+        0x01: lambda cpu: cpu._rlc(cpu.registers["C"]),  # RLC C
+        0x02: lambda cpu: cpu._rlc(cpu.registers["D"]),  # RLC D
+        0x03: lambda cpu: cpu._rlc(cpu.registers["E"]),  # RLC E
+        0x04: lambda cpu: cpu._rlc(cpu.registers["H"]),  # RLC H
+        0x05: lambda cpu: cpu._rlc(cpu.registers["L"]),  # RLC L
+        0x06: lambda cpu, m: cpu._rlc(
+            m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # RLC (HL)
+        0x07: lambda cpu: cpu._rlc(cpu.registers["A"]),  # RLC A
+        0x08: lambda cpu: cpu._rrc(cpu.registers["B"]),  # RRC B
+        0x09: lambda cpu: cpu._rrc(cpu.registers["C"]),  # RRC C
+        0x0A: lambda cpu: cpu._rrc(cpu.registers["D"]),  # RRC D
+        0x0B: lambda cpu: cpu._rrc(cpu.registers["E"]),  # RRC E
+        0x0C: lambda cpu: cpu._rrc(cpu.registers["H"]),  # RRC H
+        0x0D: lambda cpu: cpu._rrc(cpu.registers["L"]),  # RRC L
+        0x0E: lambda cpu, m: cpu._rrc(
+            m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # RRC (HL)
+        0x0F: lambda cpu: cpu._rrc(cpu.registers["A"]),  # RRC A
+
+        0x10: lambda cpu: cpu._rl(cpu.registers["B"]),  # RL B
+        0x11: lambda cpu: cpu._rl(cpu.registers["C"]),  # RL C
+        0x12: lambda cpu: cpu._rl(cpu.registers["D"]),  # RL D
+        0x13: lambda cpu: cpu._rl(cpu.registers["E"]),  # RL E
+        0x14: lambda cpu: cpu._rl(cpu.registers["H"]),  # RL H
+        0x15: lambda cpu: cpu._rl(cpu.registers["L"]),  # RL L
+        0x16: lambda cpu, m: cpu._rl(
+            m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # RL (HL)
+        0x17: lambda cpu: cpu._rl(cpu.registers["A"]),  # RL A
+        0x18: lambda cpu: cpu._rr(cpu.registers["B"]),  # RR B
+        0x19: lambda cpu: cpu._rr(cpu.registers["C"]),  # RR C
+        0x1A: lambda cpu: cpu._rr(cpu.registers["D"]),  # RR D
+        0x1B: lambda cpu: cpu._rr(cpu.registers["E"]),  # RR E
+        0x1C: lambda cpu: cpu._rr(cpu.registers["H"]),  # RR H
+        0x1D: lambda cpu: cpu._rr(cpu.registers["L"]),  # RR L
+        0x1E: lambda cpu, m: cpu._rr(
+            m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # RR (HL)
+        0x1F: lambda cpu: cpu._rr(cpu.registers["A"]),  # RR A
+
+        0x20: lambda cpu: cpu._sla(cpu.registers["B"]),  # SLA B
+        0x21: lambda cpu: cpu._sla(cpu.registers["C"]),  # SLA C
+        0x22: lambda cpu: cpu._sla(cpu.registers["D"]),  # SLA D
+        0x23: lambda cpu: cpu._sla(cpu.registers["E"]),  # SLA E
+        0x24: lambda cpu: cpu._sla(cpu.registers["H"]),  # SLA H
+        0x25: lambda cpu: cpu._sla(cpu.registers["L"]),  # SLA L
+        0x26: lambda cpu, m: cpu._sla(
+            m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # SLA (HL)
+        0x27: lambda cpu: cpu._sla(cpu.registers["A"]),  # SLA A
+        0x28: lambda cpu: cpu._sra(cpu.registers["B"]),  # SRA B
+        0x29: lambda cpu: cpu._sra(cpu.registers["C"]),  # SRA C
+        0x2A: lambda cpu: cpu._sra(cpu.registers["D"]),  # SRA D
+        0x2B: lambda cpu: cpu._sra(cpu.registers["E"]),  # SRA E
+        0x2C: lambda cpu: cpu._sra(cpu.registers["H"]),  # SRA H
+        0x2D: lambda cpu: cpu._sra(cpu.registers["L"]),  # SRA L
+        0x2E: lambda cpu, m: cpu._sra(
+            m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # SRA (HL)
+        0x2F: lambda cpu: cpu._sra(cpu.registers["A"]),  # SRA A
+
+        0x30: lambda cpu: cpu._swap(cpu.registers["B"]),  # SWAP B
+        0x31: lambda cpu: cpu._swap(cpu.registers["C"]),  # SWAP C
+        0x32: lambda cpu: cpu._swap(cpu.registers["D"]),  # SWAP D
+        0x33: lambda cpu: cpu._swap(cpu.registers["E"]),  # SWAP E
+        0x34: lambda cpu: cpu._swap(cpu.registers["H"]),  # SWAP H
+        0x35: lambda cpu: cpu._swap(cpu.registers["L"]),  # SWAP L
+        0x36: lambda cpu, m: cpu._swap(
+            m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # SWAP (HL)
+        0x37: lambda cpu: cpu._swap(cpu.registers["A"]),  # SWAP A
+        0x38: lambda cpu: cpu._srl(cpu.registers["B"]),  # SRL B
+        0x39: lambda cpu: cpu._srl(cpu.registers["C"]),  # SRL C
+        0x3A: lambda cpu: cpu._srl(cpu.registers["D"]),  # SRL D
+        0x3B: lambda cpu: cpu._srl(cpu.registers["E"]),  # SRL E
+        0x3C: lambda cpu: cpu._srl(cpu.registers["H"]),  # SRL H
+        0x3D: lambda cpu: cpu._srl(cpu.registers["L"]),  # SRL L
+        0x3E: lambda cpu, m: cpu._srl(
+            m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # SRL (HL)
+        0x3F: lambda cpu: cpu._srl(cpu.registers["A"]),  # SRL A
+
+        0x40: lambda cpu: cpu._bit(0, cpu.registers["B"]),  # BIT 0, B
+        0x41: lambda cpu: cpu._bit(0, cpu.registers["C"]),  # BIT 0, C
+        0x42: lambda cpu: cpu._bit(0, cpu.registers["D"]),  # BIT 0, D
+        0x43: lambda cpu: cpu._bit(0, cpu.registers["E"]),  # BIT 0, E
+        0x44: lambda cpu: cpu._bit(0, cpu.registers["H"]),  # BIT 0, H
+        0x45: lambda cpu: cpu._bit(0, cpu.registers["L"]),  # BIT 0, L
+        0x46: lambda cpu, m: cpu._bit(
+            0, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # BIT 0, (HL)
+        0x47: lambda cpu: cpu._bit(0, cpu.registers["A"]),  # BIT 0, A
+        0x48: lambda cpu: cpu._bit(1, cpu.registers["B"]),  # BIT 1, B
+        0x49: lambda cpu: cpu._bit(1, cpu.registers["C"]),  # BIT 1, C
+        0x4A: lambda cpu: cpu._bit(1, cpu.registers["D"]),  # BIT 1, D
+        0x4B: lambda cpu: cpu._bit(1, cpu.registers["E"]),  # BIT 1, E
+        0x4C: lambda cpu: cpu._bit(1, cpu.registers["H"]),  # BIT 1, H
+        0x4D: lambda cpu: cpu._bit(1, cpu.registers["L"]),  # BIT 1, L
+        0x4E: lambda cpu, m: cpu._bit(
+            1, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # BIT 1, (HL)
+        0x4F: lambda cpu: cpu._bit(1, cpu.registers["A"]),  # BIT 1, A
+
+        0x50: lambda cpu: cpu._bit(2, cpu.registers["B"]),  # BIT 2, B
+        0x51: lambda cpu: cpu._bit(2, cpu.registers["C"]),  # BIT 2, C
+        0x52: lambda cpu: cpu._bit(2, cpu.registers["D"]),  # BIT 2, D
+        0x53: lambda cpu: cpu._bit(2, cpu.registers["E"]),  # BIT 2, E
+        0x54: lambda cpu: cpu._bit(2, cpu.registers["H"]),  # BIT 2, H
+        0x55: lambda cpu: cpu._bit(2, cpu.registers["L"]),  # BIT 2, L
+        0x56: lambda cpu, m: cpu._bit(
+            2, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # BIT 2, (HL)
+        0x57: lambda cpu: cpu._bit(2, cpu.registers["A"]),  # BIT 2, A
+        0x58: lambda cpu: cpu._bit(3, cpu.registers["B"]),  # BIT 3, B
+        0x59: lambda cpu: cpu._bit(3, cpu.registers["C"]),  # BIT 3, C
+        0x5A: lambda cpu: cpu._bit(3, cpu.registers["D"]),  # BIT 3, D
+        0x5B: lambda cpu: cpu._bit(3, cpu.registers["E"]),  # BIT 3, E
+        0x5C: lambda cpu: cpu._bit(3, cpu.registers["H"]),  # BIT 3, H
+        0x5D: lambda cpu: cpu._bit(3, cpu.registers["L"]),  # BIT 3, L
+        0x5E: lambda cpu, m: cpu._bit(
+            3, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # BIT 3, (HL)
+        0x5F: lambda cpu: cpu._bit(3, cpu.registers["A"]),  # BIT 3, A
+
+        0x60: lambda cpu: cpu._bit(4, cpu.registers["B"]),  # BIT 4, B
+        0x61: lambda cpu: cpu._bit(4, cpu.registers["C"]),  # BIT 4, C
+        0x62: lambda cpu: cpu._bit(4, cpu.registers["D"]),  # BIT 4, D
+        0x63: lambda cpu: cpu._bit(4, cpu.registers["E"]),  # BIT 4, E
+        0x64: lambda cpu: cpu._bit(4, cpu.registers["H"]),  # BIT 4, H
+        0x65: lambda cpu: cpu._bit(4, cpu.registers["L"]),  # BIT 4, L
+        0x66: lambda cpu, m: cpu._bit(
+            4, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # BIT 4, (HL)
+        0x67: lambda cpu: cpu._bit(4, cpu.registers["A"]),  # BIT 4, A
+        0x68: lambda cpu: cpu._bit(5, cpu.registers["B"]),  # BIT 5, B
+        0x69: lambda cpu: cpu._bit(5, cpu.registers["C"]),  # BIT 5, C
+        0x6A: lambda cpu: cpu._bit(5, cpu.registers["D"]),  # BIT 5, D
+        0x6B: lambda cpu: cpu._bit(5, cpu.registers["E"]),  # BIT 5, E
+        0x6C: lambda cpu: cpu._bit(5, cpu.registers["H"]),  # BIT 5, H
+        0x6D: lambda cpu: cpu._bit(5, cpu.registers["L"]),  # BIT 5, L
+        0x6E: lambda cpu, m: cpu._bit(
+            5, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # BIT 5, (HL)
+        0x6F: lambda cpu: cpu._bit(5, cpu.registers["A"]),  # BIT 5, A
+
+        0x70: lambda cpu: cpu._bit(6, cpu.registers["B"]),  # BIT 6, B
+        0x71: lambda cpu: cpu._bit(6, cpu.registers["C"]),  # BIT 6, C
+        0x72: lambda cpu: cpu._bit(6, cpu.registers["D"]),  # BIT 6, D
+        0x73: lambda cpu: cpu._bit(6, cpu.registers["E"]),  # BIT 6, E
+        0x74: lambda cpu: cpu._bit(6, cpu.registers["H"]),  # BIT 6, H
+        0x75: lambda cpu: cpu._bit(6, cpu.registers["L"]),  # BIT 6, L
+        0x76: lambda cpu, m: cpu._bit(
+            6, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # BIT 6, (HL)
+        0x77: lambda cpu: cpu._bit(6, cpu.registers["A"]),  # BIT 6, A
+        0x78: lambda cpu: cpu._bit(7, cpu.registers["B"]),  # BIT 7, B
+        0x79: lambda cpu: cpu._bit(7, cpu.registers["C"]),  # BIT 7, C
+        0x7A: lambda cpu: cpu._bit(7, cpu.registers["D"]),  # BIT 7, D
+        0x7B: lambda cpu: cpu._bit(7, cpu.registers["E"]),  # BIT 7, E
+        0x7C: lambda cpu: cpu._bit(7, cpu.registers["H"]),  # BIT 7, H
+        0x7D: lambda cpu: cpu._bit(7, cpu.registers["L"]),  # BIT 7, L
+        0x7E: lambda cpu, m: cpu._bit(
+            7, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # BIT 7, (HL)
+        0x7F: lambda cpu: cpu._bit(7, cpu.registers["A"]),  # BIT 7, A
+
+        0x80: lambda cpu: cpu._res(0, cpu.registers["B"]),  # RES 0, B
+        0x81: lambda cpu: cpu._res(0, cpu.registers["C"]),  # RES 0, C
+        0x82: lambda cpu: cpu._res(0, cpu.registers["D"]),  # RES 0, D
+        0x83: lambda cpu: cpu._res(0, cpu.registers["E"]),  # RES 0, E
+        0x84: lambda cpu: cpu._res(0, cpu.registers["H"]),  # RES 0, H
+        0x85: lambda cpu: cpu._res(0, cpu.registers["L"]),  # RES 0, L
+        0x86: lambda cpu, m: cpu._res(
+            0, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # RES 0, (HL)
+        0x87: lambda cpu: cpu._res(0, cpu.registers["A"]),  # RES 0, A
+        0x88: lambda cpu: cpu._res(1, cpu.registers["B"]),  # RES 1, B
+        0x89: lambda cpu: cpu._res(1, cpu.registers["C"]),  # RES 1, C
+        0x8A: lambda cpu: cpu._res(1, cpu.registers["D"]),  # RES 1, D
+        0x8B: lambda cpu: cpu._res(1, cpu.registers["E"]),  # RES 1, E
+        0x8C: lambda cpu: cpu._res(1, cpu.registers["H"]),  # RES 1, H
+        0x8D: lambda cpu: cpu._res(1, cpu.registers["L"]),  # RES 1, L
+        0x8E: lambda cpu, m: cpu._res(
+            1, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # RES 1, (HL)
+        0x8F: lambda cpu: cpu._res(1, cpu.registers["A"]),  # RES 1, A
+
+        0x90: lambda cpu: cpu._res(2, cpu.registers["B"]),  # RES 2, B
+        0x91: lambda cpu: cpu._res(2, cpu.registers["C"]),  # RES 2, C
+        0x92: lambda cpu: cpu._res(2, cpu.registers["D"]),  # RES 2, D
+        0x93: lambda cpu: cpu._res(2, cpu.registers["E"]),  # RES 2, E
+        0x94: lambda cpu: cpu._res(2, cpu.registers["H"]),  # RES 2, H
+        0x95: lambda cpu: cpu._res(2, cpu.registers["L"]),  # RES 2, L
+        0x96: lambda cpu, m: cpu._res(
+            2, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # RES 2, (HL)
+        0x97: lambda cpu: cpu._res(2, cpu.registers["A"]),  # RES 2, A
+        0x98: lambda cpu: cpu._res(3, cpu.registers["B"]),  # RES 3, B
+        0x99: lambda cpu: cpu._res(3, cpu.registers["C"]),  # RES 3, C
+        0x9A: lambda cpu: cpu._res(3, cpu.registers["D"]),  # RES 3, D
+        0x9B: lambda cpu: cpu._res(3, cpu.registers["E"]),  # RES 3, E
+        0x9C: lambda cpu: cpu._res(3, cpu.registers["H"]),  # RES 3, H
+        0x9D: lambda cpu: cpu._res(3, cpu.registers["L"]),  # RES 3, L
+        0x9E: lambda cpu, m: cpu._res(
+            3, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # RES 3, (HL)
+        0x9F: lambda cpu: cpu._res(3, cpu.registers["A"]),  # RES 3, A
+
+        0xA0: lambda cpu: cpu._res(4, cpu.registers["B"]),  # RES 4, B
+        0xA1: lambda cpu: cpu._res(4, cpu.registers["C"]),  # RES 4, C
+        0xA2: lambda cpu: cpu._res(4, cpu.registers["D"]),  # RES 4, D
+        0xA3: lambda cpu: cpu._res(4, cpu.registers["E"]),  # RES 4, E
+        0xA4: lambda cpu: cpu._res(4, cpu.registers["H"]),  # RES 4, H
+        0xA5: lambda cpu: cpu._res(4, cpu.registers["L"]),  # RES 4, L
+        0xA6: lambda cpu, m: cpu._res(
+            4, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # RES 4, (HL)
+        0xA7: lambda cpu: cpu._res(4, cpu.registers["A"]),  # RES 4, A
+        0xA8: lambda cpu: cpu._res(5, cpu.registers["B"]),  # RES 5, B
+        0xA9: lambda cpu: cpu._res(5, cpu.registers["C"]),  # RES 5, C
+        0xAA: lambda cpu: cpu._res(5, cpu.registers["D"]),  # RES 5, D
+        0xAB: lambda cpu: cpu._res(5, cpu.registers["E"]),  # RES 5, E
+        0xAC: lambda cpu: cpu._res(5, cpu.registers["H"]),  # RES 5, H
+        0xAD: lambda cpu: cpu._res(5, cpu.registers["L"]),  # RES 5, L
+        0xAE: lambda cpu, m: cpu._res(
+            5, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # RES 5, (HL)
+        0xAF: lambda cpu: cpu._res(5, cpu.registers["A"]),  # RES 5, A
+
+        0xB0: lambda cpu: cpu._res(6, cpu.registers["B"]),  # RES 6, B
+        0xB1: lambda cpu: cpu._res(6, cpu.registers["C"]),  # RES 6, C
+        0xB2: lambda cpu: cpu._res(6, cpu.registers["D"]),  # RES 6, D
+        0xB3: lambda cpu: cpu._res(6, cpu.registers["E"]),  # RES 6, E
+        0xB4: lambda cpu: cpu._res(6, cpu.registers["H"]),  # RES 6, H
+        0xB5: lambda cpu: cpu._res(6, cpu.registers["L"]),  # RES 6, L
+        0xB6: lambda cpu, m: cpu._res(
+            6, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # RES 6, (HL)
+        0xB7: lambda cpu: cpu._res(6, cpu.registers["A"]),  # RES 6, A
+        0xB8: lambda cpu: cpu._res(7, cpu.registers["B"]),  # RES 7, B
+        0xB9: lambda cpu: cpu._res(7, cpu.registers["C"]),  # RES 7, C
+        0xBA: lambda cpu: cpu._res(7, cpu.registers["D"]),  # RES 7, D
+        0xBB: lambda cpu: cpu._res(7, cpu.registers["E"]),  # RES 7, E
+        0xBC: lambda cpu: cpu._res(7, cpu.registers["H"]),  # RES 7, H
+        0xBD: lambda cpu: cpu._res(7, cpu.registers["L"]),  # RES 7, L
+        0xBE: lambda cpu, m: cpu._res(
+            7, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # RES 7, (HL)
+        0xBF: lambda cpu: cpu._res(7, cpu.registers["A"]),  # RES 7, A
+
+        0xC0: lambda cpu: cpu._set(0, cpu.registers["B"]),  # SET 0, B
+        0xC1: lambda cpu: cpu._set(0, cpu.registers["C"]),  # SET 0, C
+        0xC2: lambda cpu: cpu._set(0, cpu.registers["D"]),  # SET 0, D
+        0xC3: lambda cpu: cpu._set(0, cpu.registers["E"]),  # SET 0, E
+        0xC4: lambda cpu: cpu._set(0, cpu.registers["H"]),  # SET 0, H
+        0xC5: lambda cpu: cpu._set(0, cpu.registers["L"]),  # SET 0, L
+        0xC6: lambda cpu, m: cpu._set(
+            0, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # SET 0, (HL)
+        0xC7: lambda cpu: cpu._set(0, cpu.registers["A"]),  # SET 0, A
+        0xC8: lambda cpu: cpu._set(1, cpu.registers["B"]),  # SET 1, B
+        0xC9: lambda cpu: cpu._set(1, cpu.registers["C"]),  # SET 1, C
+        0xCA: lambda cpu: cpu._set(1, cpu.registers["D"]),  # SET 1, D
+        0xCB: lambda cpu: cpu._set(1, cpu.registers["E"]),  # SET 1, E
+        0xCC: lambda cpu: cpu._set(1, cpu.registers["H"]),  # SET 1, H
+        0xCD: lambda cpu: cpu._set(1, cpu.registers["L"]),  # SET 1, L
+        0xCE: lambda cpu, m: cpu._set(
+            1, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # SET 1, (HL)
+        0xCF: lambda cpu: cpu._set(1, cpu.registers["A"]),  # SET 1, A
+
+        0xD0: lambda cpu: cpu._set(2, cpu.registers["B"]),  # SET 2, B
+        0xD1: lambda cpu: cpu._set(2, cpu.registers["C"]),  # SET 2, C
+        0xD2: lambda cpu: cpu._set(2, cpu.registers["D"]),  # SET 2, D
+        0xD3: lambda cpu: cpu._set(2, cpu.registers["E"]),  # SET 2, E
+        0xD4: lambda cpu: cpu._set(2, cpu.registers["H"]),  # SET 2, H
+        0xD5: lambda cpu: cpu._set(2, cpu.registers["L"]),  # SET 2, L
+        0xD6: lambda cpu, m: cpu._set(
+            2, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # SET 2, (HL)
+        0xD7: lambda cpu: cpu._set(2, cpu.registers["A"]),  # SET 2, A
+        0xD8: lambda cpu: cpu._set(3, cpu.registers["B"]),  # SET 3, B
+        0xD9: lambda cpu: cpu._set(3, cpu.registers["C"]),  # SET 3, C
+        0xDA: lambda cpu: cpu._set(3, cpu.registers["D"]),  # SET 3, D
+        0xDB: lambda cpu: cpu._set(3, cpu.registers["E"]),  # SET 3, E
+        0xDC: lambda cpu: cpu._set(3, cpu.registers["H"]),  # SET 3, H
+        0xDD: lambda cpu: cpu._set(3, cpu.registers["L"]),  # SET 3, L
+        0xDE: lambda cpu, m: cpu._set(
+            3, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # SET 3, (HL)
+        0xDF: lambda cpu: cpu._set(3, cpu.registers["A"]),  # SET 3, A
+
+        0xE0: lambda cpu: cpu._set(4, cpu.registers["B"]),  # SET 4, B
+        0xE1: lambda cpu: cpu._set(4, cpu.registers["C"]),  # SET 4, C
+        0xE2: lambda cpu: cpu._set(4, cpu.registers["D"]),  # SET 4, D
+        0xE3: lambda cpu: cpu._set(4, cpu.registers["E"]),  # SET 4, E
+        0xE4: lambda cpu: cpu._set(4, cpu.registers["H"]),  # SET 4, H
+        0xE5: lambda cpu: cpu._set(4, cpu.registers["L"]),  # SET 4, L
+        0xE6: lambda cpu, m: cpu._set(
+            4, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # SET 4, (HL)
+        0xE7: lambda cpu: cpu._set(4, cpu.registers["A"]),  # SET 4, A
+        0xE8: lambda cpu: cpu._set(5, cpu.registers["B"]),  # SET 5, B
+        0xE9: lambda cpu: cpu._set(5, cpu.registers["C"]),  # SET 5, C
+        0xEA: lambda cpu: cpu._set(5, cpu.registers["D"]),  # SET 5, D
+        0xEB: lambda cpu: cpu._set(5, cpu.registers["E"]),  # SET 5, E
+        0xEC: lambda cpu: cpu._set(5, cpu.registers["H"]),  # SET 5, H
+        0xED: lambda cpu: cpu._set(5, cpu.registers["L"]),  # SET 5, L
+        0xEE: lambda cpu, m: cpu._set(
+            5, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # SET 5, (HL)
+        0xEF: lambda cpu: cpu._set(5, cpu.registers["A"]),  # SET 5, A
+
+        0xF0: lambda cpu: cpu._set(6, cpu.registers["B"]),  # SET 6, B
+        0xF1: lambda cpu: cpu._set(6, cpu.registers["C"]),  # SET 6, C
+        0xF2: lambda cpu: cpu._set(6, cpu.registers["D"]),  # SET 6, D
+        0xF3: lambda cpu: cpu._set(6, cpu.registers["E"]),  # SET 6, E
+        0xF4: lambda cpu: cpu._set(6, cpu.registers["H"]),  # SET 6, H
+        0xF5: lambda cpu: cpu._set(6, cpu.registers["L"]),  # SET 6, L
+        0xF6: lambda cpu, m: cpu._set(
+            6, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # SET 6, (HL)
+        0xF7: lambda cpu: cpu._set(6, cpu.registers["A"]),  # SET 6, A
+        0xF8: lambda cpu: cpu._set(7, cpu.registers["B"]),  # SET 7, B
+        0xF9: lambda cpu: cpu._set(7, cpu.registers["C"]),  # SET 7, C
+        0xFA: lambda cpu: cpu._set(7, cpu.registers["D"]),  # SET 7, D
+        0xFB: lambda cpu: cpu._set(7, cpu.registers["E"]),  # SET 7, E
+        0xFC: lambda cpu: cpu._set(7, cpu.registers["H"]),  # SET 7, H
+        0xFD: lambda cpu: cpu._set(7, cpu.registers["L"]),  # SET 7, L
+        0xFE: lambda cpu, m: cpu._set(
+            7, m.read_byte(cpu.registers["H"] << 8 | cpu.registers["L"])
+        ),  # SET 7, (HL)
+        0xFF: lambda cpu: cpu._set(7, cpu.registers["A"]),  # SET 7, A
     }
 
     # Helper methods for flag manipulation
@@ -364,6 +691,7 @@ class CPU:  # 8bit
             self.execute_opcode(opcode, m)
         else:
             self._cb(opcode, m)
+            self.check_cb = False  # reset cb mode
 
     def execute_opcode(self, opcode, m):
         try:
@@ -386,6 +714,7 @@ class CPU:  # 8bit
 
     def _cb(self, opcode, m):
         try:
+            self.check_cb = True  # cb mode
             print("Executing CB prefixed opcode: ", hex(opcode))
             if opcode in self.cb_opcodes:
                 opcode_func = self.cb_opcodes[opcode]
@@ -393,8 +722,10 @@ class CPU:  # 8bit
 
                 if num_args == 1:
                     opcode_func(self)
+                    self.PC += 2
                 elif num_args == 2:
                     opcode_func(self, m)
+                    self.PC += 2
                 else:
                     raise ValueError(
                         f"Unexpected number of arguments for opcode {hex(opcode)}: {num_args}")
@@ -411,6 +742,12 @@ class CPU:  # 8bit
     def _halt(self):  # TODO: implement further
         self.PC += 1
 
+    def _stop(self, m):  # TODO: implement once input is implemented
+        m.read_byte(self.PC)
+        self.PC += 1
+
+    # rotate functions
+
     def _rlca(self):
         carry = (self.registers["A"] & 0x80) >> 7
         self.registers["A"] = ((self.registers["A"] << 1) & 0xFF) | carry
@@ -424,6 +761,20 @@ class CPU:  # 8bit
         self.registers["F"] = (self.registers["F"] & 0xEF) | (
             carry << 4)  # Update the carry flag
         self.PC += 1
+
+    def _rla(self):
+        carry = (self.registers["A"] & 0x80) >> 7
+        self.registers["A"] = ((self.registers["A"] << 1)
+                               & 0xFF) | self.get_flag("C")
+        self.registers["F"] = (self.registers["F"] & 0xEF) | (
+            carry << 4)
+
+    def _rra(self):
+        carry = self.registers["A"] & 0x01
+        self.registers["A"] = (self.registers["A"] >> 1) | (
+            self.get_flag("C") << 7)
+        self.registers["F"] = (self.registers["F"] & 0xEF) | (
+            carry << 4)
 
     def _scf(self):
         self.registers["F"] = (self.registers["F"] & 0x90) | 0x10
@@ -563,13 +914,13 @@ class CPU:  # 8bit
 
     # INC/DEC functions
 
-    def _inc(self, reg1):
-        self.registers[reg1] = (self.registers[reg1] + 1) & 0xFF
-        self.inc_flag(self.registers[reg1])
+    def _inc(self, reg_val):
+        reg_val = (reg_val + 1) & 0xFF
+        self.inc_flag(reg_val)
 
     def _inc_16(self, reg1, reg2):
         reg16 = ((self.registers[reg1] << 8 |
-                 self.registers[reg2]) + 1) & 0xFFFF
+                  self.registers[reg2]) + 1) & 0xFFFF
         self.registers[reg1] = (reg16 >> 8) & 0xFF
         self.registers[reg2] = reg16 & 0xFF
 
@@ -589,13 +940,13 @@ class CPU:  # 8bit
         else:
             raise ValueError("Invalid register")
 
-    def _dec(self, reg1):
-        self.registers[reg1] = (self.registers[reg1] - 1) & 0xFF
-        self.dec_flag(self.registers[reg1])
+    def _dec(self, reg_val):
+        reg_val = (reg_val - 1) & 0xFF
+        self.dec_flag(reg_val)
 
     def _dec_16(self, reg1, reg2):
         reg16 = ((self.registers[reg1] << 8 |
-                 self.registers[reg2]) - 1) & 0xFFFF
+                  self.registers[reg2]) - 1) & 0xFFFF
         self.registers[reg1] = (reg16 >> 8) & 0xFF
         self.registers[reg2] = reg16 & 0xFF
 
@@ -625,8 +976,8 @@ class CPU:  # 8bit
         self.ADD_16_16_Flags(reg16)
 
     def _add_16_sp(self, reg1, reg2):
-        reg16 = (self.registers[reg1] << 8 | self.registers[reg2]) + \
-            self.SP & 0xFFFF
+        reg16 = (self.registers[reg1] << 8 |
+                 self.registers[reg2]) + self.SP & 0xFFFF
         self.registers[reg1] = (reg16 >> 8) & 0xFF
         self.registers[reg2] = reg16 & 0xFF
         self.ADD_16_16_Flags(reg16)
@@ -876,6 +1227,80 @@ class CPU:  # 8bit
         print("Illegal instruction at 0x{:04X}".format(self.PC))
         self.PC += 1
 
+    # xCB prefixed functions
+
+    # RLC/RRC functions
+    def _rlc(self, reg_val):
+        self.set_flag("C", reg_val & 0x80)
+        reg_val = ((reg_val << 1)
+                   & 0xFF) | (self.get_flag("C") >> 7)
+        self.rl_rr_flags(reg_val)
+
+    def _rrc(self, reg_val):
+        self.set_flag("C", reg_val & 0x01)
+        reg_val = (reg_val >> 1) | (
+            self.get_flag("C") << 7)
+        self.rl_rr_flags(reg_val)
+
+    # RL/RR functions
+    def _rl(self, reg_val):
+        carry = self.get_flag("C")
+        self.set_flag("C", reg_val & 0x80)
+        reg_val = ((reg_val << 1) & 0xFF) | carry
+        self.rl_rr_flags(reg_val)
+
+    def _rr(self, reg_val):
+        carry = self.get_flag("C")
+        self.set_flag("C", reg_val & 0x01)
+        reg_val = (reg_val >> 1) | (carry << 7)
+        self.rl_rr_flags(reg_val)
+
+    # SLA/SRA functions
+    def _sla(self, reg_val):
+        self.set_flag("C", reg_val & 0x80)
+        reg_val = (reg_val << 1) & 0xFF
+        self.rl_rr_flags(reg_val)
+        self.PC += 1
+
+    def _sra(self, reg_val):
+        self.set_flag("C", reg_val & 0x01)
+        reg_val = (reg_val >> 1) | (
+            reg_val & 0x80)
+        self.rl_rr_flags(reg_val)
+        self.PC += 1
+
+    # SWAP functions
+    def _swap(self, reg_val):
+        reg_val = ((reg_val & 0xF) << 4) | (
+            (reg_val & 0xF0) >> 4)
+        self.or_flags(reg_val)
+        self.PC += 1
+
+    # SRL functions
+    def _srl(self, reg_val):
+        self.set_flag("C", reg_val & 0x01)
+        reg_val = reg_val >> 1
+        self.rl_rr_flags(reg_val)
+
+        self.PC += 1
+
+    # BIT functions
+    def _bit(self, bit, reg_val):
+        self.set_flag("Z", not (reg_val & (1 << bit)))
+        self.set_flag("N", False)
+        self.set_flag("H", True)
+        self.PC += 1
+
+    # RES functions
+    def _res(self, bit, reg_val):
+        reg_val &= ~(1 << bit)
+        self.PC += 1
+
+    # SET functions
+    def _set(self, bit, reg_val):
+        reg_val |= (1 << bit)
+        self.PC += 1
+
     # Flag set implementations
 
     def add_flags(self, reg_val):
@@ -890,42 +1315,45 @@ class CPU:  # 8bit
         self.set_flag("H", (reg_val & 0xF) > 0xF)
         self.set_flag("C", reg_val > 0xFF)
 
-    def inc_flag(self, reg):
-        self.set_flag("Z", reg == 0)
+    def inc_flag(self, reg_val):
+        self.set_flag("Z", reg_val == 0)
         self.set_flag("N", False)
-        self.set_flag("H", (reg & 0xF) == 0x0)
+        self.set_flag("H", (reg_val & 0xF) == 0x0)
 
-    def dec_flag(self, reg):
-        self.set_flag("Z", reg == 0)
+    def dec_flag(self, reg_val):
+        self.set_flag("Z", reg_val == 0)
         self.set_flag("N", True)
-        self.set_flag("H", (reg & 0xF) == 0xF)
+        self.set_flag("H", (reg_val & 0xF) == 0xF)
 
     # for AND opcodes (same flags)
 
-    def and_flags(self, value):
-        self.set_flag("Z", value == 0)
+    def and_flags(self, reg_val):
+        self.set_flag("Z", reg_val == 0)
         self.set_flag("N", False)
         self.set_flag("H", True)
         self.set_flag("C", False)
 
     # for OR opcodes (same flags)
-    def or_flags(self, value):
-        self.set_flag("Z", value == 0)
+    def or_flags(self, reg_val):
+        self.set_flag("Z", reg_val == 0)
         self.set_flag("N", False)
         self.set_flag("H", False)
         self.set_flag("C", False)
 
     # CP opcodes (same flags)
-    def cp_flags(self, value):
-        self.set_flag("Z", self.registers["A"] == value)
+    def cp_flags(self, reg_val):
+        self.set_flag("Z", self.registers["A"] == reg_val)
         self.set_flag("N", True)
-        self.set_flag("H", (self.registers["A"] & 0xF) < (value & 0xF))
-        self.set_flag("C", self.registers["A"] < value)
-        self.set_flag("C", self.registers["A"] < value)
+        self.set_flag("H", (self.registers["A"] & 0xF) < (reg_val & 0xF))
+        self.set_flag("C", self.registers["A"] < reg_val)
 
-    def rot_flags(self, value):
-        self.set_flag("Z", value == 0)
+    def rot_flags(self, reg_val):
+        self.set_flag("Z", reg_val == 0)
         self.set_flag("N", False)
         self.set_flag("H", False)
-        self.set_flag("C", value & 0x01)
-        self.set_flag("C", value & 0x01)
+        self.set_flag("C", reg_val & 0x01)
+
+    def rl_rr_flags(self, reg_val):
+        self.set_flag("Z", reg_val == 0)
+        self.set_flag("N", False)
+        self.set_flag("H", False)
