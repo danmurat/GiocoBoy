@@ -1,3 +1,5 @@
+import sys
+
 from cpu import CPU
 from memory import Memory
 
@@ -6,8 +8,6 @@ from memory import Memory
 # method of the CPU class. There are around 500 opcodes for the Game Boy's CPU
 # (the Sharp LR35902), which makes the task quite extensive.
 
-
-import sys
 
 class GameBoyEmulator:
     def __init__(self, rom_path):
@@ -23,6 +23,7 @@ class GameBoyEmulator:
     def run(self):
         while True:
             self.cpu.execute_next_instruction(self.memory)
+
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
