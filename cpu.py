@@ -728,6 +728,11 @@ class CPU:  # 8bit
     def request_interrupt(self, interrupt):
         self.interrupt_flags |= 1 << interrupt
 
+    def calc_clock_speed(self, start_time, end_time):
+        elapsed_time = end_time - start_time
+        clock_speed = self.clock_speed / elapsed_time
+        return clock_speed
+
     # Helper methods for flag manipulation
 
     def set_flag(self, flag, value):
@@ -748,7 +753,6 @@ class CPU:  # 8bit
     def execute_next_instruction(self, m):
         print("Executing next instruction")
         opcode = m.read_byte(self.PC)
-        self.PC += 1
         if not self.check_cb:
             self.execute_opcode(opcode, m)
         else:
@@ -834,6 +838,7 @@ class CPU:  # 8bit
                                & 0xFF) | self.get_flag("C")
         self.registers["F"] = (self.registers["F"] & 0xEF) | (
             carry << 4)
+        self.PC += 1
 
     def _rra(self):
         carry = self.registers["A"] & 0x01
@@ -841,6 +846,7 @@ class CPU:  # 8bit
             self.get_flag("C") << 7)
         self.registers["F"] = (self.registers["F"] & 0xEF) | (
             carry << 4)
+        self.PC += 1
 
     def _scf(self):
         self.registers["F"] = (self.registers["F"] & 0x90) | 0x10
@@ -854,20 +860,21 @@ class CPU:  # 8bit
     # LD functions
     def _ld_r_r(self, reg1, reg2):
         self.registers[reg1] = self.registers[reg2]
+        self.PC += 1
 
     def _ld_r_n(self, reg1, m):
         self.registers[reg1] = m.read_byte(self.PC)
-        self.PC += 1
+        self.PC += 2
 
     def _ld_rr_nn(self, reg1, reg2, m):
         nn = m.read_word(self.PC)
-        self.PC += 2
+        self.PC += 3
         self.registers[reg1] = (nn >> 8) & 0xFF
         self.registers[reg2] = nn & 0xFF
 
     def _ld_r_nn(self, m):
         nn = m.read_word(self.PC)
-        self.PC += 2
+        self.PC += 3
         self.registers["A"] = m.read_byte(nn)
 
     def _ld_nn_r(self, m):
@@ -876,7 +883,7 @@ class CPU:  # 8bit
 
     def _ld_nn_sp(self, m):
         nn = m.read_word(self.PC)
-        self.PC += 2
+        self.PC += 3
         m.write_word(nn, self.SP)
 
     def _ld_sp_nn(self, m):
@@ -885,10 +892,11 @@ class CPU:  # 8bit
 
     def _ld_sp_hl(self):
         self.SP = self.registers["H"] << 8 | self.registers["L"]
+        self.PC += 1
 
     def _ld_hl_sp_n(self, m):
         n = m.read_byte(self.PC)
-        self.PC += 1
+        self.PC += 2
         self.SP += n
         self.set_flag("Z", False)
         self.set_flag("N", False)
@@ -898,35 +906,41 @@ class CPU:  # 8bit
     def _ld_r_16(self, reg1, reg2, reg3, m):
         address = self.registers[reg2] << 8 | self.registers[reg3]
         self.registers[reg1] = m.read_byte(address)
+        self.PC += 1
 
     def _ld_16_r(self, reg1, reg2, reg3, m):
         address = self.registers[reg1] << 8 | self.registers[reg2]
         m.write_byte(address, self.registers[reg3])
+        self.PC += 1
 
     def _ld_n_to_16(self, reg1, reg2, m):
         address = self.registers[reg1] << 8 | self.registers[reg2]
         m.write_byte(address, m.read_byte(self.PC))
-        self.PC += 1
+        self.PC += 2
 
     def _ldi_to_16(self, reg1, reg2, reg3, m):
         address = self.registers[reg1] << 8 | self.registers[reg2]
         m.write_byte(address, self.registers[reg3])
         self._inc_16(reg1, reg2)
+        self.PC += 1
 
     def _ldi_from_16(self, reg1, reg2, reg3, m):
         address = self.registers[reg2] << 8 | self.registers[reg3]
         self.registers[reg1] = m.read_byte(address)
         self._inc_16(reg2, reg3)
+        self.PC += 1
 
     def _ldd_to_16(self, reg1, reg2, reg3, m):
         address = self.registers[reg1] << 8 | self.registers[reg2]
         m.write_byte(address, self.registers[reg3])
         self._dec_16(reg1, reg2)
+        self.PC += 1
 
     def _ldd_from_16(self, reg1, reg2, reg3, m):
         address = self.registers[reg2] << 8 | self.registers[reg3]
         self.registers[reg1] = m.read_byte(address)
         self._dec_16(reg2, reg3)
+        self.PC += 1
 
     # JR functions
     def _jr_n(self, m):
@@ -936,25 +950,25 @@ class CPU:  # 8bit
         if not self.get_flag("Z"):
             self.PC += m.read_byte(self.PC) + 1
         else:
-            self.PC += 1
+            self.PC += 2
 
     def _jr_z_n(self, m):
         if self.get_flag("Z"):
             self.PC += m.read_byte(self.PC) + 1
         else:
-            self.PC += 1
+            self.PC += 2
 
     def _jr_nc_n(self, m):
         if not self.get_flag("C"):
             self.PC += m.read_byte(self.PC) + 1
         else:
-            self.PC += 1
+            self.PC += 2
 
     def _jr_c_n(self, m):
         if self.get_flag("C"):
             self.PC += m.read_byte(self.PC) + 1
         else:
-            self.PC += 1
+            self.PC += 2
 
     def _daa(self):
         if not self.get_flag("N"):
@@ -971,24 +985,29 @@ class CPU:  # 8bit
 
         self.set_flag("Z", self.registers["A"] == 0)
         self.set_flag("H", False)
+        self.PC += 1
 
     def _di(self):
         self.IME = False
+        self.PC += 1
 
     def _ei(self):
         self.IME = True
+        self.PC += 1
 
     # INC/DEC functions
 
     def _inc(self, reg_val):
         reg_val = (reg_val + 1) & 0xFF
         self.inc_flag(reg_val)
+        self.PC += 1
 
     def _inc_16(self, reg1, reg2):
         reg16 = ((self.registers[reg1] << 8 |
                   self.registers[reg2]) + 1) & 0xFFFF
         self.registers[reg1] = (reg16 >> 8) & 0xFF
         self.registers[reg2] = reg16 & 0xFF
+        self.PC += 1
 
     def _inc_pntrs(self, reg):
         if reg == "PC":
@@ -1009,12 +1028,14 @@ class CPU:  # 8bit
     def _dec(self, reg_val):
         reg_val = (reg_val - 1) & 0xFF
         self.dec_flag(reg_val)
+        self.PC += 1
 
     def _dec_16(self, reg1, reg2):
         reg16 = ((self.registers[reg1] << 8 |
                   self.registers[reg2]) - 1) & 0xFFFF
         self.registers[reg1] = (reg16 >> 8) & 0xFF
         self.registers[reg2] = reg16 & 0xFF
+        self.PC += 1
 
     # ADD functions
 
@@ -1022,16 +1043,17 @@ class CPU:  # 8bit
         self.registers[reg1] = (self.registers[reg1] +
                                 self.registers[reg2]) & 0xFF
         self.add_flags(self.registers[reg1])
+        self.PC += 1
 
     def _add_n(self, reg1, m):
         self.registers[reg1] = (self.registers[reg1] +
                                 m.read_byte(self.PC)) & 0xFF
-        self.PC += 1
+        self.PC += 2
         self.add_flags(self.registers[reg1])
 
     def _add_sp_n(self, m):
         self.SP = (self.SP + m.read_byte(self.PC)) & 0xFFFF
-        self.PC += 1
+        self.PC += 2
         self.add_flags(self.SP)
 
     def _add_16_16(self, reg1, reg2, reg3, reg4):
@@ -1040,6 +1062,7 @@ class CPU:  # 8bit
         self.registers[reg1] = (reg16 >> 8) & 0xFF
         self.registers[reg2] = reg16 & 0xFF
         self.ADD_16_16_Flags(reg16)
+        self.PC += 1
 
     def _add_16_sp(self, reg1, reg2):
         reg16 = (self.registers[reg1] << 8 |
@@ -1047,6 +1070,7 @@ class CPU:  # 8bit
         self.registers[reg1] = (reg16 >> 8) & 0xFF
         self.registers[reg2] = reg16 & 0xFF
         self.ADD_16_16_Flags(reg16)
+        self.PC += 1
 
     def ADD_16_16_Flags(self, reg_val):
         self.set_flag("N", False)
@@ -1059,18 +1083,20 @@ class CPU:  # 8bit
         self.registers[reg1] = (self.registers[reg1] + self.registers[reg2] +
                                 self.get_flag("C")) & 0xFF
         self.add_flags(self.registers[reg1])
+        self.PC += 1
 
     def _adc_from_16(self, reg1, reg2, reg3, m):
         address = self.registers[reg2] << 8 | self.registers[reg3]
         self.registers[reg1] = (self.registers[reg1] + m.read_byte(address) +
                                 self.get_flag("C")) & 0xFF
         self.add_flags(self.registers[reg1])
+        self.PC += 1
 
     def _adc_n(self, reg1, m):
         self.registers[reg1] = (self.registers[reg1] +
                                 m.read_byte(self.PC) +
                                 self.get_flag("C")) & 0xFF
-        self.PC += 1
+        self.PC += 2
         self.add_flags(self.registers[reg1])
 
     # SUB functions
@@ -1079,17 +1105,19 @@ class CPU:  # 8bit
         self.registers[reg1] = (self.registers[reg1] -
                                 self.registers[reg2]) & 0xFF
         self.sub_flags(self.registers[reg1])
+        self.PC += 1
 
     def _sub_from_16(self, reg1, reg2, reg3, m):
         address = self.registers[reg2] << 8 | self.registers[reg3]
         self.registers[reg1] = (self.registers[reg1] -
                                 m.read_byte(address)) & 0xFF
         self.sub_flags(self.registers[reg1])
+        self.PC += 1
 
     def _sub_n(self, reg1, m):
         self.registers[reg1] = (self.registers[reg1] -
                                 m.read_byte(self.PC)) & 0xFF
-        self.PC += 1
+        self.PC += 2
         self.sub_flags(self.registers[reg1])
 
     # SBC functions
@@ -1098,75 +1126,85 @@ class CPU:  # 8bit
         self.registers[reg1] = (self.registers[reg1] - self.registers[reg2] -
                                 self.get_flag("C")) & 0xFF
         self.sub_flags(self.registers[reg1])
+        self.PC += 1
 
     def _sbc_from_16(self, reg1, reg2, reg3, m):
         address = self.registers[reg2] << 8 | self.registers[reg3]
         self.registers[reg1] = (self.registers[reg1] -
                                 m.read_byte(address) - self.get_flag("C")) & 0xFF
         self.sub_flags(self.registers[reg1])
+        self.PC += 1
 
     def _sbc_n(self, reg, m):
         self.registers[reg] = (self.registers[reg] -
                                m.read_byte(self.PC) - self.get_flag("C")) & 0xFF
-        self.PC += 1
+        self.PC += 2
         self.sub_flags(self.registers[reg])
 
     # AND functions
     def _and(self, reg1, reg2):
         self.registers[reg1] = self.registers[reg1] & self.registers[reg2]
         self.and_flags(self.registers[reg1])
+        self.PC += 1
 
     def _and_from_16(self, reg1, reg2, reg3, m):
         address = self.registers[reg2] << 8 | self.registers[reg3]
         self.registers[reg1] = self.registers[reg1] & m.read_byte(address)
         self.and_flags(self.registers[reg1])
+        self.PC += 1
 
     def _and_n(self, reg, m):
         self.registers[reg] = self.registers[reg] & m.read_byte(self.PC)
-        self.PC += 1
+        self.PC += 2
         self.and_flags(self.registers[reg])
 
     # OR functions
     def _or(self, reg1, reg2):
         self.registers[reg1] = self.registers[reg1] | self.registers[reg2]
         self.or_flags(self.registers[reg1])
+        self.PC += 1
 
     def _or_from_16(self, reg1, reg2, reg3, m):
         address = self.registers[reg2] << 8 | self.registers[reg3]
         self.registers[reg1] = self.registers[reg1] | m.read_byte(address)
         self.or_flags(self.registers[reg1])
+        self.PC += 1
 
     def _or_n(self, reg, m):
         self.registers[reg] = self.registers[reg] | m.read_byte(self.PC)
-        self.PC += 1
+        self.PC += 2
         self.or_flags(self.registers[reg])
 
     # XOR functions
     def _xor(self, reg1, reg2):
         self.registers[reg1] = self.registers[reg1] ^ self.registers[reg2]
         self.or_flags(self.registers[reg1])
+        self.PC += 1
 
     def _xor_from_16(self, reg1, reg2, reg3, m):
         address = self.registers[reg2] << 8 | self.registers[reg3]
         self.registers[reg1] = self.registers[reg1] ^ m.read_byte(address)
         self.or_flags(self.registers[reg1])
+        self.PC += 1
 
     def _xor_n(self, reg, m):
         self.registers[reg] = self.registers[reg] ^ m.read_byte(self.PC)
-        self.PC += 1
+        self.PC += 2
         self.or_flags(self.registers[reg])
 
     # CP functions
     def _cp(self, reg):
         self.cp_flags(self.registers[reg])
+        self.PC += 1
 
     def _cp_from_16(self, reg1, reg2, m):
         address = self.registers[reg1] << 8 | self.registers[reg2]
         self.cp_flags(m.read_byte(address))
+        self.PC += 1
 
     def _cp_n(self, m):
         self.cp_flags(m.read_byte(self.PC))
-        self.PC += 1
+        self.PC += 2
 
     # RET functions
     def _ret_nz(self, m):
@@ -1174,15 +1212,21 @@ class CPU:  # 8bit
             self.PC = m.read_word(self.SP)
             self.SP += 2
 
+        self.PC += 1
+
     def _ret_z(self, m):
         if self.get_flag("Z"):
             self.PC = m.read_word(self.SP)
             self.SP += 2
 
+        self.PC += 1
+
     def _ret_nc(self, m):
         if not self.get_flag("C"):
             self.PC = m.read_word(self.SP)
             self.SP += 2
+
+        self.PC += 1
 
     def _ret_c(self, m):
         if self.get_flag("C"):
@@ -1205,17 +1249,21 @@ class CPU:  # 8bit
         self.registers[reg1] = m.read_byte(self.SP)
         self.registers[reg2] = m.read_byte((self.SP + 1) & 0xFF)
         self.SP += 2
+        self.PC += 1
 
     def _push(self, reg1, reg2, m):
         self.SP -= 2
         m.write_byte(self.SP, self.registers[reg1])
         m.write_byte((self.SP + 1) & 0xFF, self.registers[reg2])
+        self.PC += 1
 
     # JP functions
 
     def _jp_nz(self, m):
         if not self.get_flag("Z"):
-            self.PC = m.read_word(self.PC)
+            self.PC = m.read_word(self.PC + 1)
+        else:
+            self.PC += 2
 
     def _jp_nn(self, m):
         self.PC = m.read_word(self.PC)
@@ -1223,14 +1271,20 @@ class CPU:  # 8bit
     def _jp_z_nn(self, m):
         if self.get_flag("Z"):
             self.PC = m.read_word(self.PC)
+        else:
+            self.PC += 2
 
     def _jp_nc_nn(self, m):
         if not self.get_flag("C"):
             self.PC = m.read_word(self.PC)
+        else:
+            self.PC += 2
 
     def _jp_c_nn(self, m):
         if self.get_flag("C"):
             self.PC = m.read_word(self.PC)
+        else:
+            self.PC += 2
 
     def _jp_hl(self):
         self.PC = self.registers["H"] << 8 | self.registers["L"]
@@ -1242,12 +1296,16 @@ class CPU:  # 8bit
             self.SP -= 2
             m.write_word(self.SP, self.PC + 2)
             self.PC = m.read_word(self.PC)
+        else:
+            self.PC += 2
 
     def _call_z_nn(self, m):
         if self.get_flag("Z"):
             self.SP -= 2
             m.write_word(self.SP, self.PC + 2)
             self.PC = m.read_word(self.PC)
+        else:
+            self.PC += 2
 
     def _call_nn(self, m):
         self.SP -= 2
@@ -1259,12 +1317,16 @@ class CPU:  # 8bit
             self.SP -= 2
             m.write_word(self.SP, self.PC + 2)
             self.PC = m.read_word(self.PC)
+        else:
+            self.PC += 2
 
     def _call_c_nn(self, m):
         if self.get_flag("C"):
             self.SP -= 2
             m.write_word(self.SP, self.PC + 2)
             self.PC = m.read_word(self.PC)
+        else:
+            self.PC += 2
 
     # RST functions
 
@@ -1277,17 +1339,19 @@ class CPU:  # 8bit
 
     def _ldh_n_a(self, m):
         m.write_byte(0xFF00 + m.read_byte(self.PC + 1), self.registers["A"])
-        self.PC += 1
+        self.PC += 2
 
     def _ldh_a_n(self, m):
         self.registers["A"] = m.read_byte(0xFF00 + m.read_byte(self.PC + 1))
-        self.PC += 1
+        self.PC += 2
 
     def _ldh_c_a(self, m):
         m.write_byte(0xFF00 + self.registers["C"], self.registers["A"])
+        self.PC += 1
 
     def _ldh_a_c(self, m):
         self.registers["A"] = m.read_byte(0xFF00 + self.registers["C"])
+        self.PC += 1
 
     def _illegal(self):
         print("Illegal instruction at 0x{:04X}".format(self.PC))

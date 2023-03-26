@@ -1,0 +1,27 @@
+INTERRUPTS:
+
+1. Implement the Interrupt Vectors: When an interrupt is triggered, the CPU jumps to a 
+   specific address in memory called the interrupt vector. The Game Boy has five interrupt 
+   vectors for the corresponding interrupts:
+    - V-Blank: 0x0040
+    - LCD STAT: 0x0048
+    - Timer: 0x0050
+    - Serial: 0x0058
+    - Joypad: 0x0060
+
+2. Check for pending interrupts: In your emulator's main loop, where the CPU executes 
+   instructions, you should also check for pending interrupts. If the IME flag is set and 
+   a pending interrupt is enabled, handle the interrupt.
+
+3. Handle the interrupt: When an interrupt is triggered, you should:
+    - Disable the IME flag.
+    - Push the current PC onto the stack.
+    - Jump to the corresponding interrupt vector.
+
+4. Update the IF register: Whenever an interrupt is requested, you should set the 
+   corresponding bit in the IF register. You should also clear the bit when the 
+   interrupt is acknowledged.
+
+5. Implement the RST instruction: The Game Boy uses the RST instruction to jump to the 
+   interrupt vector. You should implement this instruction in your CPU opcode set.
+

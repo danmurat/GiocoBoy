@@ -1,10 +1,11 @@
 A gameboy emulator written in python.
 
-TODO: 
-- Complete opcode set
+TODO:
+- Implement interrupts
 
 Intentions:
 
-- Mostly working/accurate emulator
-- Acceptable performance
-- Add ai/bot functionality
+- Mostly working/accurate emulator (boots and runs several top titles)
+- Acceptable performance (python)
+- Add ai/bot functionality?
+- Work on web?

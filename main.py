@@ -1,4 +1,5 @@
 import sys
+import time
 
 from cpu import CPU
 from memory import Memory
@@ -19,12 +20,20 @@ class GameBoyEmulator:
         with open(rom_path, 'rb') as f:
             rom_data = f.read()
         self.memory.load_rom(rom_data)
+        # self.memory.print_rom_data()
 
     def run(self):
-        while True:
+        start = time.time()
+        n = 0
+        while n < 100:
             self.cpu.execute_next_instruction(self.memory)
+            n += 1
             # cycles = self.cpu.execute_next_instruction(self.memory)
             # self.cpu.cycles += cycles
+
+        end = time.time()
+
+        print(self.cpu.calc_clock_speed(start, end))
 
 
 if __name__ == '__main__':
