@@ -23,6 +23,8 @@ class GameBoyEmulator:
     def run(self):
         while True:
             self.cpu.execute_next_instruction(self.memory)
+            # cycles = self.cpu.execute_next_instruction(self.memory)
+            # self.cpu.cycles += cycles
 
 
 if __name__ == '__main__':
