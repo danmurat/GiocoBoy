@@ -1,3 +1,29 @@
+NOTES FOR NEXT PICKUP: Tuesday night
+
+there is an issue at pc: 0xc186
+
+pop hl is called, h must become: c1 
+                  l must become: b1
+
+However, we are getting l as b2.
+
+our _pop was changed at somepoint because a register was 1 int behind what it should've
+been. Therefore we made a change to our _pop:
+
+def _pop(self, reg1, reg2):
+    self.registers[reg1] = self.m.read_byte(self.SP + 1)
+    self.registers[reg2] = self.m.read_byte(self.SP) + 1 # Where we add a one here
+    self.SP += 2
+    self.PC += 1
+
+Apparantly this is incorrect and there should be no + 1 there.
+
+At this moment, I would remove the + 1, then check the last 0xE1 (POP HL) instruction
+call and check for other reasons/fixes to why we are getting the register value 1
+less than what it should be. 
+
+
+
 INTERRUPTS:
 
 1. Implement the Interrupt Vectors: When an interrupt is triggered, the CPU jumps to a 
