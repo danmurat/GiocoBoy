@@ -6,8 +6,8 @@ import sys
 
 # @jitclass
 class CPU:  # 8bit
-    def __init__(self, memory):
-        self.m = memory
+    def __init__(self):
+        self.m = None  # memory
         self.debug_mode = False
 
         self.registers = {
@@ -37,8 +37,12 @@ class CPU:  # 8bit
 
         # interrupts
         self.IME: bool = False  # flag
-        self.IF: int = 0x00  # interrupt request
-        self.IE: int = 0x00  # interrupt enable
+        self.set_IME_next = False
+        self.halted = False
+
+        # timers
+        self.div_counter = 256
+        self.tima_counter = 0
 
     """
     INFO:
@@ -59,81 +63,66 @@ class CPU:  # 8bit
         0x04: (lambda cpu: cpu._inc("B"), 1),  # INC B
         0x05: (lambda cpu: cpu._dec("B"), 1),  # DEC B
         0x06: (lambda cpu: cpu._ld_r_n("B"), 2),  # LD B, n
-        0x07: (lambda cpu: cpu._rlca(), 1),  # RLCA # IMPLEMENT
+        0x07: (lambda cpu: cpu._rlca(), 1),  # RLCA
         0x08: (lambda cpu: cpu._ld_nn_sp(), 5),  # LD (nn), SP
-        # ADD HL, BC
-        0x09: (lambda cpu: cpu._add_16_16("H", "L", "B", "C"), 2),
+        0x09: (lambda cpu: cpu._add_16_16("H", "L", "B", "C"), 2),  # ADD HL, BC
         0x0A: (lambda cpu: cpu._ld_r_16("A", "B", "C"), 2),  # LD A, (BC)
         0x0B: (lambda cpu: cpu._dec_16("B", "C"), 2),  # DEC BC
         0x0C: (lambda cpu: cpu._inc("C"), 1),  # INC C
         0x0D: (lambda cpu: cpu._dec("C"), 1),  # DEC C
         0x0E: (lambda cpu: cpu._ld_r_n("C"), 2),  # LD C, n
+        0x0F: (lambda cpu: cpu._rrca(), 1),  # RRCA
 
-        0x0F: (lambda cpu: cpu._rrca(), 1),  # RRCA # IMPLEMENT
-        0x10: (lambda cpu: cpu._stop(), 1),  # STOP # IMPLEMENT
-
+        0x10: (lambda cpu: cpu._stop(), 0),  # STOP
         0x11: (lambda cpu: cpu._ld_rr_nn("D", "E"), 3),  # LD DE, nn
         0x12: (lambda cpu: cpu._ld_16_r("D", "E", "A"), 2),  # LD (DE), A
         0x13: (lambda cpu: cpu._inc_16("D", "E"), 2),  # INC DE
         0x14: (lambda cpu: cpu._inc("D"), 1),  # INC D
         0x15: (lambda cpu: cpu._dec("D"), 1),  # DEC D
         0x16: (lambda cpu: cpu._ld_r_n("D"), 2),  # LD D, n
-
-        0x17: (lambda cpu: cpu._rla(), 3),  # RLA # IMPLEMENT
+        0x17: (lambda cpu: cpu._rla(), 1),  # RLA
         0x18: (lambda cpu: cpu._jr_n(), 3),  # JR n
-
-        # ADD HL, DE
-        0x19: (lambda cpu: cpu._add_16_16("H", "L", "D", "E"), 2),
+        0x19: (lambda cpu: cpu._add_16_16("H", "L", "D", "E"), 2),  # ADD HL, DE
         0x1A: (lambda cpu: cpu._ld_r_16("A", "D", "E"), 2),  # LD A, (DE)
         0x1B: (lambda cpu: cpu._dec_16("D", "E"), 2),  # DEC DE
         0x1C: (lambda cpu: cpu._inc("E"), 1),  # INC E
         0x1D: (lambda cpu: cpu._dec("E"), 1),  # DEC E
         0x1E: (lambda cpu: cpu._ld_r_n("E"), 2),  # LD E, n
+        0x1F: (lambda cpu: cpu._rra(), 1),  # RRA
 
-        0x1F: (lambda cpu: cpu._rra(), 1),  # RRA # IMPLEMENT
-        0x20: (lambda cpu: cpu._jr_nz_n(), 3),  # JR NZ, n
-
+        0x20: (lambda cpu: cpu._jr_nz_n(), 2),  # JR NZ, n
         0x21: (lambda cpu: cpu._ld_rr_nn("H", "L"), 3),  # LD HL, nn
-        # LDI (HL), A
-        0x22: (lambda cpu: cpu._ldi_to_16("H", "L", "A"), 2),
+        0x22: (lambda cpu: cpu._ldi_to_16("H", "L", "A"), 2),  # LDI (HL), A
         0x23: (lambda cpu: cpu._inc_16("H", "L"), 2),  # INC HL
         0x24: (lambda cpu: cpu._inc("H"), 1),  # INC H
         0x25: (lambda cpu: cpu._dec("H"), 1),  # DEC H
         0x26: (lambda cpu: cpu._ld_r_n("H"), 2),  # LD H, n
-        0x27: (lambda cpu: cpu._daa(), 1),  # DAA # IMPLEMENT
+        0x27: (lambda cpu: cpu._daa(), 1),  # DAA
         0x28: (lambda cpu: cpu._jr_z_n(), 2),  # JR Z, n
-        # ADD HL, HL
-        0x29: (lambda cpu: cpu._add_16_16("H", "L", "H", "L"), 2),
-        # LDI A, (HL)
-        0x2A: (lambda cpu: cpu._ldi_from_16("A", "H", "L"), 2),
+        0x29: (lambda cpu: cpu._add_16_16("H", "L", "H", "L"), 2),  # ADD HL, HL
+        0x2A: (lambda cpu: cpu._ldi_from_16("A", "H", "L"), 2),  # LDI A, (HL)
         0x2B: (lambda cpu: cpu._dec_16("H", "L"), 2),  # DEC HL
         0x2C: (lambda cpu: cpu._inc("L"), 1),  # INC L
         0x2D: (lambda cpu: cpu._dec("L"), 1),  # DEC L
         0x2E: (lambda cpu: cpu._ld_r_n("L"), 2),  # LD L, n
-
-        0x2F: (lambda cpu: cpu._cpl(), 1),  # CPL # IMPLEMENT
+        0x2F: (lambda cpu: cpu._cpl(), 1),  # CPL
 
         0x30: (lambda cpu: cpu._jr_nc_n(), 2),  # JR NC, n
         0x31: (lambda cpu: cpu._ld_sp_nn(), 3),  # LD SP, nn
-        # LDD (HL), A
-        0x32: (lambda cpu: cpu._ldd_to_16("H", "L", "A"), 2),
-        0x33: (lambda cpu: cpu._inc_pntrs("SP"), 2),  # INC SP
+        0x32: (lambda cpu: cpu._ldd_to_16("H", "L", "A"), 2),  # LDD (HL), A
+        0x33: (lambda cpu: cpu._inc_sp(), 2),  # INC SP
         0x34: (lambda cpu: cpu._inc_hl(), 3),  # INC (HL)
         0x35: (lambda cpu: cpu._dec_hl(), 3),  # DEC (HL)
         0x36: (lambda cpu: cpu._ld_n_to_16("H", "L"), 3),  # LD (HL), n
-
-        0x37: (lambda cpu: cpu._scf(), 1),  # SCF # IMPLEMENT
-
+        0x37: (lambda cpu: cpu._scf(), 1),  # SCF
         0x38: (lambda cpu: cpu._jr_c_n(), 2),  # JR C, n
         0x39: (lambda cpu: cpu._add_16_sp("H", "L"), 2),  # ADD HL, SP
-        # LDD A, (HL)
-        0x3A: (lambda cpu: cpu._ldd_from_16("A", "H", "L"), 2),
-        0x3B: (lambda cpu: cpu._dec_pntrs("SP"), 2),  # DEC SP
+        0x3A: (lambda cpu: cpu._ldd_from_16("A", "H", "L"), 2),  # LDD A, (HL)
+        0x3B: (lambda cpu: cpu._dec_sp(), 2),  # DEC SP
         0x3C: (lambda cpu: cpu._inc("A"), 1),  # INC A
         0x3D: (lambda cpu: cpu._dec("A"), 1),  # DEC A
         0x3E: (lambda cpu: cpu._ld_r_n("A"), 2),  # LD A, n
-
-        0x3F: (lambda cpu: cpu._ccf(), 1),  # CCF # IMPLEMENT
+        0x3F: (lambda cpu: cpu._ccf(), 1),  # CCF
 
         0x40: (lambda cpu: cpu._ld_r_r("B", "B"), 1),  # LD B, B
         0x41: (lambda cpu: cpu._ld_r_r("B", "C"), 1),  # LD B, C
@@ -184,17 +173,15 @@ class CPU:  # 8bit
         0x6C: (lambda cpu: cpu._ld_r_r("L", "H"), 1),  # LD L, H
         0x6D: (lambda cpu: cpu._ld_r_r("L", "L"), 1),  # LD L, L
         0x6E: (lambda cpu: cpu._ld_r_16("L", "H", "L"), 2),  # LD L, (HL)
-
         0x6F: (lambda cpu: cpu._ld_r_r("L", "A"), 1),  # LD L, A
+
         0x70: (lambda cpu: cpu._ld_16_r("H", "L", "B"), 2),  # LD (HL), B
         0x71: (lambda cpu: cpu._ld_16_r("H", "L", "C"), 2),  # LD (HL), C
         0x72: (lambda cpu: cpu._ld_16_r("H", "L", "D"), 2),  # LD (HL), D
         0x73: (lambda cpu: cpu._ld_16_r("H", "L", "E"), 2),  # LD (HL), E
         0x74: (lambda cpu: cpu._ld_16_r("H", "L", "H"), 2),  # LD (HL), H
         0x75: (lambda cpu: cpu._ld_16_r("H", "L", "L"), 2),  # LD (HL), L
-
-        0x76: (lambda cpu: cpu._halt(), 1),  # HALT (TODO: implement)
-
+        0x76: (lambda cpu: cpu._halt(), 0),  # HALT
         0x77: (lambda cpu: cpu._ld_16_r("H", "L", "A"), 2),  # LD (HL), A
         0x78: (lambda cpu: cpu._ld_r_r("A", "B"), 1),  # LD A, B
         0x79: (lambda cpu: cpu._ld_r_r("A", "C"), 1),  # LD A, C
@@ -211,18 +198,15 @@ class CPU:  # 8bit
         0x83: (lambda cpu: cpu._add("A", "E"), 1),  # ADD A, E
         0x84: (lambda cpu: cpu._add("A", "H"), 1),  # ADD A, H
         0x85: (lambda cpu: cpu._add("A", "L"), 1),  # ADD A, L
-        # ADD A, (HL)
-        0x86: (lambda cpu: cpu._add_a_hl(), 2),
+        0x86: (lambda cpu: cpu._add_a_hl(), 2),     # ADD A, (HL)
         0x87: (lambda cpu: cpu._add("A", "A"), 1),  # ADD A, A
-
         0x88: (lambda cpu: cpu._adc("A", "B"), 1),  # ADC A, B
         0x89: (lambda cpu: cpu._adc("A", "C"), 1),  # ADC A, C
         0x8A: (lambda cpu: cpu._adc("A", "D"), 1),  # ADC A, D
         0x8B: (lambda cpu: cpu._adc("A", "E"), 1),  # ADC A, E
         0x8C: (lambda cpu: cpu._adc("A", "H"), 1),  # ADC A, H
         0x8D: (lambda cpu: cpu._adc("A", "L"), 1),  # ADC A, L
-        # ADC A, (HL)
-        0x8E: (lambda cpu: cpu._adc_from_16("A", "H", "L"), 2),
+        0x8E: (lambda cpu: cpu._adc_from_16("A", "H", "L"), 2),  # ADC A, (HL)
         0x8F: (lambda cpu: cpu._adc("A", "A"), 1),  # ADC A, A
 
         0x90: (lambda cpu: cpu._sub("A", "B"), 1),  # SUB A, B
@@ -231,18 +215,15 @@ class CPU:  # 8bit
         0x93: (lambda cpu: cpu._sub("A", "E"), 1),  # SUB A, E
         0x94: (lambda cpu: cpu._sub("A", "H"), 1),  # SUB A, H
         0x95: (lambda cpu: cpu._sub("A", "L"), 1),  # SUB A, L
-        # SUB A, (HL)
-        0x96: (lambda cpu: cpu._sub_from_16("A", "H", "L"), 2),
+        0x96: (lambda cpu: cpu._sub_from_16("A", "H", "L"), 2),  # SUB A, (HL)
         0x97: (lambda cpu: cpu._sub("A", "A"), 1),  # SUB A, A
-
         0x98: (lambda cpu: cpu._sbc("A", "B"), 1),  # SBC A, B
         0x99: (lambda cpu: cpu._sbc("A", "C"), 1),  # SBC A, C
         0x9A: (lambda cpu: cpu._sbc("A", "D"), 1),  # SBC A, D
         0x9B: (lambda cpu: cpu._sbc("A", "E"), 1),  # SBC A, E
         0x9C: (lambda cpu: cpu._sbc("A", "H"), 1),  # SBC A, H
         0x9D: (lambda cpu: cpu._sbc("A", "L"), 1),  # SBC A, L
-        # SBC A, (HL)
-        0x9E: (lambda cpu: cpu._sbc_from_16("A", "H", "L"), 2),
+        0x9E: (lambda cpu: cpu._sbc_from_16("A", "H", "L"), 2),  # SBC A, (HL)
         0x9F: (lambda cpu: cpu._sbc("A", "A"), 1),  # SBC A, A
 
         0xA0: (lambda cpu: cpu._and("A", "B"), 1),  # AND A, B
@@ -251,18 +232,15 @@ class CPU:  # 8bit
         0xA3: (lambda cpu: cpu._and("A", "E"), 1),  # AND A, E
         0xA4: (lambda cpu: cpu._and("A", "H"), 1),  # AND A, H
         0xA5: (lambda cpu: cpu._and("A", "L"), 1),  # AND A, L
-        # AND A, (HL)
-        0xA6: (lambda cpu: cpu._and_from_16("A", "H", "L"), 2),
+        0xA6: (lambda cpu: cpu._and_from_16("A", "H", "L"), 2),  # AND A, (HL)
         0xA7: (lambda cpu: cpu._and("A", "A"), 1),  # AND A, A
-
         0xA8: (lambda cpu: cpu._xor("A", "B"), 1),  # XOR A, B
         0xA9: (lambda cpu: cpu._xor("A", "C"), 1),  # XOR A, C
         0xAA: (lambda cpu: cpu._xor("A", "D"), 1),  # XOR A, D
         0xAB: (lambda cpu: cpu._xor("A", "E"), 1),  # XOR A, E
         0xAC: (lambda cpu: cpu._xor("A", "H"), 1),  # XOR A, H
         0xAD: (lambda cpu: cpu._xor("A", "L"), 1),  # XOR A, L
-        # XOR A, (HL)
-        0xAE: (lambda cpu: cpu._xor_from_16("A", "H", "L"), 2),
+        0xAE: (lambda cpu: cpu._xor_from_16("A", "H", "L"), 2),  # XOR A, (HL)
         0xAF: (lambda cpu: cpu._xor("A", "A"), 1),  # XOR A, A
 
         0xB0: (lambda cpu: cpu._or("A", "B"), 1),  # OR A, B
@@ -271,10 +249,8 @@ class CPU:  # 8bit
         0xB3: (lambda cpu: cpu._or("A", "E"), 1),  # OR A, E
         0xB4: (lambda cpu: cpu._or("A", "H"), 1),  # OR A, H
         0xB5: (lambda cpu: cpu._or("A", "L"), 1),  # OR A, L
-        # OR A, (HL)
-        0xB6: (lambda cpu: cpu._or_from_16("A", "H", "L"), 2),
+        0xB6: (lambda cpu: cpu._or_from_16("A", "H", "L"), 2),  # OR A, (HL)
         0xB7: (lambda cpu: cpu._or("A", "A"), 1),  # OR A, A
-
         0xB8: (lambda cpu: cpu._cp("B"), 1),  # CP A, B
         0xB9: (lambda cpu: cpu._cp("C"), 1),  # CP A, C
         0xBA: (lambda cpu: cpu._cp("D"), 1),  # CP A, D
@@ -292,12 +268,11 @@ class CPU:  # 8bit
         0xC5: (lambda cpu: cpu._push("B", "C"), 4),  # PUSH BC
         0xC6: (lambda cpu: cpu._add_n("A"), 2),  # ADD A, n
         0xC7: (lambda cpu: cpu._rst(0x00), 4),  # RST 00H
-        0xC8: (lambda cpu: cpu._ret_z(), 5),  # RET Z
+        0xC8: (lambda cpu: cpu._ret_z(), 2),  # RET Z
         0xC9: (lambda cpu: cpu._ret(), 4),  # RET
         # JP Z, nn # 3 w/o branch, 4 w/ branch
         0xCA: (lambda cpu: cpu._jp_z_nn(), 3),
-        # CB prefix
-        0xCB: (lambda cpu: cpu._cb(), 1),
+        0xCB: (lambda cpu: cpu._cb(), 0),  # CB prefix
         # CALL Z, nn # 3 w/o branch, 6 w/ branch
         0xCC: (lambda cpu: cpu._call_z_nn(), 3),
         0xCD: (lambda cpu: cpu._call_nn(), 6),  # CALL nn
@@ -308,12 +283,11 @@ class CPU:  # 8bit
         0xD1: (lambda cpu: cpu._pop("D", "E"), 3),  # POP DE
         0xD2: (lambda cpu: cpu._jp_nc_nn(), 3),  # JP NC, nn cy4 w/ branch
         0xD3: (lambda cpu: cpu._illegal(), 0),  # Illegal opcode
-        # CALL NC, nn 6 w/ branch
-        0xD4: (lambda cpu: cpu._call_nc_nn(), 3),
-        0xD5: (lambda cpu: cpu._push("D", "E"), 4444),  # PUSH DE
+        0xD4: (lambda cpu: cpu._call_nc_nn(), 3),  # CALL NC, nn 6 w/ branch
+        0xD5: (lambda cpu: cpu._push("D", "E"), 4),  # PUSH DE
         0xD6: (lambda cpu: cpu._sub_n("A"), 2),  # SUB A, n
         0xD7: (lambda cpu: cpu._rst(0x10), 4),  # RST 10H
-        0xD8: (lambda cpu: cpu._ret_c(), 5),  # RET C
+        0xD8: (lambda cpu: cpu._ret_c(), 2),  # RET C
         0xD9: (lambda cpu: cpu._reti(), 4),  # RETI
         0xDA: (lambda cpu: cpu._jp_c_nn(), 3),  # JP C, nn 4 w/ branch
         0xDB: (lambda cpu: cpu._illegal(), 0),  # Illegal opcode
@@ -357,7 +331,6 @@ class CPU:  # 8bit
         0xFF: (lambda cpu: cpu._rst(0x38), 4),  # RST 38H
     }
 
-    # cpu.registers[] are not passed by reference! Fix this!
     cb_opcodes = {
         0x00: (lambda cpu: cpu._rlc("B"), 2),  # RLC B
         0x01: (lambda cpu: cpu._rlc("C"), 2),  # RLC C
@@ -433,7 +406,7 @@ class CPU:  # 8bit
         0x43: (lambda cpu: cpu._bit(0, "E"), 2),  # BIT 0, E
         0x44: (lambda cpu: cpu._bit(0, "H"), 2),  # BIT 0, H
         0x45: (lambda cpu: cpu._bit(0, "L"), 2),  # BIT 0, L
-        0x46: (lambda cpu: cpu._bit_hl(), 3),  # BIT 0, (HL)
+        0x46: (lambda cpu: cpu._bit_hl(0), 3),  # BIT 0, (HL)
         0x47: (lambda cpu: cpu._bit(0, "A"), 2),  # BIT 0, A
         0x48: (lambda cpu: cpu._bit(1, "B"), 2),  # BIT 1, B
         0x49: (lambda cpu: cpu._bit(1, "C"), 2),  # BIT 1, C
@@ -441,7 +414,7 @@ class CPU:  # 8bit
         0x4B: (lambda cpu: cpu._bit(1, "E"), 2),  # BIT 1, E
         0x4C: (lambda cpu: cpu._bit(1, "H"), 2),  # BIT 1, H
         0x4D: (lambda cpu: cpu._bit(1, "L"), 2),  # BIT 1, L
-        0x4E: (lambda cpu: cpu._bit_hl(), 3),  # BIT 1, (HL)
+        0x4E: (lambda cpu: cpu._bit_hl(1), 3),  # BIT 1, (HL)
         0x4F: (lambda cpu: cpu._bit(1, "A"), 2),  # BIT 1, A
 
         0x50: (lambda cpu: cpu._bit(2, "B"), 2),  # BIT 2, B
@@ -450,7 +423,7 @@ class CPU:  # 8bit
         0x53: (lambda cpu: cpu._bit(2, "E"), 2),  # BIT 2, E
         0x54: (lambda cpu: cpu._bit(2, "H"), 2),  # BIT 2, H
         0x55: (lambda cpu: cpu._bit(2, "L"), 2),  # BIT 2, L
-        0x56: (lambda cpu: cpu._bit_hl(), 3),  # BIT 2, (HL)
+        0x56: (lambda cpu: cpu._bit_hl(2), 3),  # BIT 2, (HL)
         0x57: (lambda cpu: cpu._bit(2, "A"), 2),  # BIT 2, A
         0x58: (lambda cpu: cpu._bit(3, "B"), 2),  # BIT 3, B
         0x59: (lambda cpu: cpu._bit(3, "C"), 2),  # BIT 3, C
@@ -458,7 +431,7 @@ class CPU:  # 8bit
         0x5B: (lambda cpu: cpu._bit(3, "E"), 2),  # BIT 3, E
         0x5C: (lambda cpu: cpu._bit(3, "H"), 2),  # BIT 3, H
         0x5D: (lambda cpu: cpu._bit(3, "L"), 2),  # BIT 3, L
-        0x5E: (lambda cpu: cpu._bit_hl(), 3),  # BIT 3, (HL)
+        0x5E: (lambda cpu: cpu._bit_hl(3), 3),  # BIT 3, (HL)
         0x5F: (lambda cpu: cpu._bit(3, "A"), 2),  # BIT 3, A
 
         0x60: (lambda cpu: cpu._bit(4, "B"), 2),  # BIT 4, B
@@ -467,7 +440,7 @@ class CPU:  # 8bit
         0x63: (lambda cpu: cpu._bit(4, "E"), 2),  # BIT 4, E
         0x64: (lambda cpu: cpu._bit(4, "H"), 2),  # BIT 4, H
         0x65: (lambda cpu: cpu._bit(4, "L"), 2),  # BIT 4, L
-        0x66: (lambda cpu: cpu._bit_hl(), 3),  # BIT 4, (HL)
+        0x66: (lambda cpu: cpu._bit_hl(4), 3),  # BIT 4, (HL)
         0x67: (lambda cpu: cpu._bit(4, "A"), 2),  # BIT 4, A
         0x68: (lambda cpu: cpu._bit(5, "B"), 2),  # BIT 5, B
         0x69: (lambda cpu: cpu._bit(5, "C"), 2),  # BIT 5, C
@@ -475,7 +448,7 @@ class CPU:  # 8bit
         0x6B: (lambda cpu: cpu._bit(5, "E"), 2),  # BIT 5, E
         0x6C: (lambda cpu: cpu._bit(5, "H"), 2),  # BIT 5, H
         0x6D: (lambda cpu: cpu._bit(5, "L"), 2),  # BIT 5, L
-        0x6E: (lambda cpu: cpu._bit_hl(), 3),  # BIT 5, (HL)
+        0x6E: (lambda cpu: cpu._bit_hl(5), 3),  # BIT 5, (HL)
         0x6F: (lambda cpu: cpu._bit(5, "A"), 2),  # BIT 5, A
 
         0x70: (lambda cpu: cpu._bit(6, "B"), 2),  # BIT 6, B
@@ -484,7 +457,7 @@ class CPU:  # 8bit
         0x73: (lambda cpu: cpu._bit(6, "E"), 2),  # BIT 6, E
         0x74: (lambda cpu: cpu._bit(6, "H"), 2),  # BIT 6, H
         0x75: (lambda cpu: cpu._bit(6, "L"), 2),  # BIT 6, L
-        0x76: (lambda cpu: cpu._bit_hl(), 3),  # BIT 6, (HL)
+        0x76: (lambda cpu: cpu._bit_hl(6), 3),  # BIT 6, (HL)
         0x77: (lambda cpu: cpu._bit(6, "A"), 2),  # BIT 6, A
         0x78: (lambda cpu: cpu._bit(7, "B"), 2),  # BIT 7, B
         0x79: (lambda cpu: cpu._bit(7, "C"), 2),  # BIT 7, C
@@ -492,7 +465,7 @@ class CPU:  # 8bit
         0x7B: (lambda cpu: cpu._bit(7, "E"), 2),  # BIT 7, E
         0x7C: (lambda cpu: cpu._bit(7, "H"), 2),  # BIT 7, H
         0x7D: (lambda cpu: cpu._bit(7, "L"), 2),  # BIT 7, L
-        0x7E: (lambda cpu: cpu._bit_hl(), 3),  # BIT 7, (HL)
+        0x7E: (lambda cpu: cpu._bit_hl(7), 3),  # BIT 7, (HL)
         0x7F: (lambda cpu: cpu._bit(7, "A"), 2),  # BIT 7, A
 
         0x80: (lambda cpu: cpu._res(0, "B"), 2),  # RES 0, B
@@ -501,7 +474,7 @@ class CPU:  # 8bit
         0x83: (lambda cpu: cpu._res(0, "E"), 2),  # RES 0, E
         0x84: (lambda cpu: cpu._res(0, "H"), 2),  # RES 0, H
         0x85: (lambda cpu: cpu._res(0, "L"), 2),  # RES 0, L
-        0x86: (lambda cpu: cpu._res_hl(), 4),  # RES 0, (HL)
+        0x86: (lambda cpu: cpu._res_hl(0), 4),  # RES 0, (HL)
         0x87: (lambda cpu: cpu._res(0, "A"), 2),  # RES 0, A
         0x88: (lambda cpu: cpu._res(1, "B"), 2),  # RES 1, B
         0x89: (lambda cpu: cpu._res(1, "C"), 2),  # RES 1, C
@@ -509,7 +482,7 @@ class CPU:  # 8bit
         0x8B: (lambda cpu: cpu._res(1, "E"), 2),  # RES 1, E
         0x8C: (lambda cpu: cpu._res(1, "H"), 2),  # RES 1, H
         0x8D: (lambda cpu: cpu._res(1, "L"), 2),  # RES 1, L
-        0x8E: (lambda cpu: cpu._res_hl(), 4),  # RES 1, (HL)
+        0x8E: (lambda cpu: cpu._res_hl(1), 4),  # RES 1, (HL)
         0x8F: (lambda cpu: cpu._res(1, "A"), 2),  # RES 1, A
 
         0x90: (lambda cpu: cpu._res(2, "B"), 2),  # RES 2, B
@@ -518,7 +491,7 @@ class CPU:  # 8bit
         0x93: (lambda cpu: cpu._res(2, "E"), 2),  # RES 2, E
         0x94: (lambda cpu: cpu._res(2, "H"), 2),  # RES 2, H
         0x95: (lambda cpu: cpu._res(2, "L"), 2),  # RES 2, L
-        0x96: (lambda cpu: cpu._res_hl(), 4),  # RES 2, (HL)
+        0x96: (lambda cpu: cpu._res_hl(2), 4),  # RES 2, (HL)
         0x97: (lambda cpu: cpu._res(2, "A"), 2),  # RES 2, A
         0x98: (lambda cpu: cpu._res(3, "B"), 2),  # RES 3, B
         0x99: (lambda cpu: cpu._res(3, "C"), 2),  # RES 3, C
@@ -526,7 +499,7 @@ class CPU:  # 8bit
         0x9B: (lambda cpu: cpu._res(3, "E"), 2),  # RES 3, E
         0x9C: (lambda cpu: cpu._res(3, "H"), 2),  # RES 3, H
         0x9D: (lambda cpu: cpu._res(3, "L"), 2),  # RES 3, L
-        0x9E: (lambda cpu: cpu._res_hl(), 4),  # RES 3, (HL)
+        0x9E: (lambda cpu: cpu._res_hl(3), 4),  # RES 3, (HL)
         0x9F: (lambda cpu: cpu._res(3, "A"), 2),  # RES 3, A
 
         0xA0: (lambda cpu: cpu._res(4, "B"), 2),  # RES 4, B
@@ -535,7 +508,7 @@ class CPU:  # 8bit
         0xA3: (lambda cpu: cpu._res(4, "E"), 2),  # RES 4, E
         0xA4: (lambda cpu: cpu._res(4, "H"), 2),  # RES 4, H
         0xA5: (lambda cpu: cpu._res(4, "L"), 2),  # RES 4, L
-        0xA6: (lambda cpu: cpu._res_hl(), 4),  # RES 4, (HL)
+        0xA6: (lambda cpu: cpu._res_hl(4), 4),  # RES 4, (HL)
         0xA7: (lambda cpu: cpu._res(4, "A"), 2),  # RES 4, A
         0xA8: (lambda cpu: cpu._res(5, "B"), 2),  # RES 5, B
         0xA9: (lambda cpu: cpu._res(5, "C"), 2),  # RES 5, C
@@ -543,7 +516,7 @@ class CPU:  # 8bit
         0xAB: (lambda cpu: cpu._res(5, "E"), 2),  # RES 5, E
         0xAC: (lambda cpu: cpu._res(5, "H"), 2),  # RES 5, H
         0xAD: (lambda cpu: cpu._res(5, "L"), 2),  # RES 5, L
-        0xAE: (lambda cpu: cpu._res_hl(), 4),  # RES 5, (HL)
+        0xAE: (lambda cpu: cpu._res_hl(5), 4),  # RES 5, (HL)
         0xAF: (lambda cpu: cpu._res(5, "A"), 2),  # RES 5, A
 
         0xB0: (lambda cpu: cpu._res(6, "B"), 2),  # RES 6, B
@@ -552,7 +525,7 @@ class CPU:  # 8bit
         0xB3: (lambda cpu: cpu._res(6, "E"), 2),  # RES 6, E
         0xB4: (lambda cpu: cpu._res(6, "H"), 2),  # RES 6, H
         0xB5: (lambda cpu: cpu._res(6, "L"), 2),  # RES 6, L
-        0xB6: (lambda cpu: cpu._res_hl(), 4),  # RES 6, (HL)
+        0xB6: (lambda cpu: cpu._res_hl(6), 4),  # RES 6, (HL)
         0xB7: (lambda cpu: cpu._res(6, "A"), 2),  # RES 6, A
         0xB8: (lambda cpu: cpu._res(7, "B"), 2),  # RES 7, B
         0xB9: (lambda cpu: cpu._res(7, "C"), 2),  # RES 7, C
@@ -560,7 +533,7 @@ class CPU:  # 8bit
         0xBB: (lambda cpu: cpu._res(7, "E"), 2),  # RES 7, E
         0xBC: (lambda cpu: cpu._res(7, "H"), 2),  # RES 7, H
         0xBD: (lambda cpu: cpu._res(7, "L"), 2),  # RES 7, L
-        0xBE: (lambda cpu: cpu._res_hl(), 4),  # RES 7, (HL)
+        0xBE: (lambda cpu: cpu._res_hl(7), 4),  # RES 7, (HL)
         0xBF: (lambda cpu: cpu._res(7, "A"), 2),  # RES 7, A
 
         0xC0: (lambda cpu: cpu._set(0, "B"), 2),  # SET 0, B
@@ -569,7 +542,7 @@ class CPU:  # 8bit
         0xC3: (lambda cpu: cpu._set(0, "E"), 2),  # SET 0, E
         0xC4: (lambda cpu: cpu._set(0, "H"), 2),  # SET 0, H
         0xC5: (lambda cpu: cpu._set(0, "L"), 2),  # SET 0, L
-        0xC6: (lambda cpu: cpu._set_hl(), 4),  # SET 0, (HL)
+        0xC6: (lambda cpu: cpu._set_hl(0), 4),  # SET 0, (HL)
         0xC7: (lambda cpu: cpu._set(0, "A"), 2),  # SET 0, A
         0xC8: (lambda cpu: cpu._set(1, "B"), 2),  # SET 1, B
         0xC9: (lambda cpu: cpu._set(1, "C"), 2),  # SET 1, C
@@ -577,7 +550,7 @@ class CPU:  # 8bit
         0xCB: (lambda cpu: cpu._set(1, "E"), 2),  # SET 1, E
         0xCC: (lambda cpu: cpu._set(1, "H"), 2),  # SET 1, H
         0xCD: (lambda cpu: cpu._set(1, "L"), 2),  # SET 1, L
-        0xCE: (lambda cpu: cpu._set_hl(), 4),  # SET 1, (HL)
+        0xCE: (lambda cpu: cpu._set_hl(1), 4),  # SET 1, (HL)
         0xCF: (lambda cpu: cpu._set(1, "A"), 1),  # SET 1, A
 
         0xD0: (lambda cpu: cpu._set(2, "B"), 2),  # SET 2, B
@@ -586,7 +559,7 @@ class CPU:  # 8bit
         0xD3: (lambda cpu: cpu._set(2, "E"), 2),  # SET 2, E
         0xD4: (lambda cpu: cpu._set(2, "H"), 2),  # SET 2, H
         0xD5: (lambda cpu: cpu._set(2, "L"), 2),  # SET 2, L
-        0xD6: (lambda cpu: cpu._set_hl(), 4),  # SET 2, (HL)
+        0xD6: (lambda cpu: cpu._set_hl(2), 4),  # SET 2, (HL)
         0xD7: (lambda cpu: cpu._set(2, "A"), 2),  # SET 2, A
         0xD8: (lambda cpu: cpu._set(3, "B"), 2),  # SET 3, B
         0xD9: (lambda cpu: cpu._set(3, "C"), 2),  # SET 3, C
@@ -594,7 +567,7 @@ class CPU:  # 8bit
         0xDB: (lambda cpu: cpu._set(3, "E"), 2),  # SET 3, E
         0xDC: (lambda cpu: cpu._set(3, "H"), 2),  # SET 3, H
         0xDD: (lambda cpu: cpu._set(3, "L"), 2),  # SET 3, L
-        0xDE: (lambda cpu: cpu._set_hl(), 4),  # SET 3, (HL)
+        0xDE: (lambda cpu: cpu._set_hl(3), 4),  # SET 3, (HL)
         0xDF: (lambda cpu: cpu._set(3, "A"), 2),  # SET 3, A
 
         0xE0: (lambda cpu: cpu._set(4, "B"), 2),  # SET 4, B
@@ -603,7 +576,7 @@ class CPU:  # 8bit
         0xE3: (lambda cpu: cpu._set(4, "E"), 2),  # SET 4, E
         0xE4: (lambda cpu: cpu._set(4, "H"), 2),  # SET 4, H
         0xE5: (lambda cpu: cpu._set(4, "L"), 2),  # SET 4, L
-        0xE6: (lambda cpu: cpu._set_hl(), 4),  # SET 4, (HL)
+        0xE6: (lambda cpu: cpu._set_hl(4), 4),  # SET 4, (HL)
         0xE7: (lambda cpu: cpu._set(4, "A"), 2),  # SET 4, A
         0xE8: (lambda cpu: cpu._set(5, "B"), 2),  # SET 5, B
         0xE9: (lambda cpu: cpu._set(5, "C"), 2),  # SET 5, C
@@ -611,7 +584,7 @@ class CPU:  # 8bit
         0xEB: (lambda cpu: cpu._set(5, "E"), 2),  # SET 5, E
         0xEC: (lambda cpu: cpu._set(5, "H"), 2),  # SET 5, H
         0xED: (lambda cpu: cpu._set(5, "L"), 2),  # SET 5, L
-        0xEE: (lambda cpu: cpu._set_hl(), 4),  # SET 5, (HL)
+        0xEE: (lambda cpu: cpu._set_hl(5), 4),  # SET 5, (HL)
         0xEF: (lambda cpu: cpu._set(5, "A"), 2),  # SET 5, A
 
         0xF0: (lambda cpu: cpu._set(6, "B"), 2),  # SET 6, B
@@ -620,7 +593,7 @@ class CPU:  # 8bit
         0xF3: (lambda cpu: cpu._set(6, "E"), 2),  # SET 6, E
         0xF4: (lambda cpu: cpu._set(6, "H"), 2),  # SET 6, H
         0xF5: (lambda cpu: cpu._set(6, "L"), 2),  # SET 6, L
-        0xF6: (lambda cpu: cpu._set_hl(), 4),  # SET 6, (HL)
+        0xF6: (lambda cpu: cpu._set_hl(6), 4),  # SET 6, (HL)
         0xF7: (lambda cpu: cpu._set(6, "A"), 2),  # SET 6, A
         0xF8: (lambda cpu: cpu._set(7, "B"), 2),  # SET 7, B
         0xF9: (lambda cpu: cpu._set(7, "C"), 2),  # SET 7, C
@@ -628,7 +601,7 @@ class CPU:  # 8bit
         0xFB: (lambda cpu: cpu._set(7, "E"), 2),  # SET 7, E
         0xFC: (lambda cpu: cpu._set(7, "H"), 2),  # SET 7, H
         0xFD: (lambda cpu: cpu._set(7, "L"), 2),  # SET 7, L
-        0xFE: (lambda cpu: cpu._set_hl(), 4),  # SET 7, (HL)
+        0xFE: (lambda cpu: cpu._set_hl(7), 4),  # SET 7, (HL)
         0xFF: (lambda cpu: cpu._set(7, "A"), 2),  # SET 7, A
     }
 
@@ -665,44 +638,75 @@ class CPU:  # 8bit
 
         print(debug_output)
 
+    def debug_timer_registers(self):
+        print("DIV: 0x{:02X}".format(self.m.DIV))
+        print("TIMA: 0x{:02X}".format(self.m.TIMA))
+        print("TMA: 0x{:02X}".format(self.m.TMA))
+        print("TAC: 0x{:02X}".format(self.m.TAC))
+        print("tima_counter: {}".format(self.tima_counter))
+        print()
+
     # TIMERS
 
-    def update_timers(self, cycles):
-        self.divider_counter += cycles
-        if self.divider_counter >= 256:
-            self.divider_counter = 0
-            self.divider_register += 1
+    def update_timer(self, cycles):
+        self.update_divider_register(cycles)
+        self.update_tima(cycles)
 
-        if self.timer_enabled:
-            self.timer_counter += cycles
-            if self.timer_counter >= self.timer_clocks[self.timer_clock_select]:
-                self.timer_counter = 0
-                self.timer_register += 1
-                if self.timer_register == 0:
-                    self.timer_register = self.timer_modulo
-                    self.request_interrupt(2)
+    def update_divider_register(self, cycles):
+        div_cycles = 256
+        self.div_counter -= cycles
+
+        while self.div_counter <= 0:
+            self.div_counter += div_cycles
+            self.m.DIV = (self.m.DIV + 1) & 0xFF
+
+    def get_tima_cycles(self):
+        freqs = {0: 1024, 1: 16, 2: 64, 3: 256}
+        return freqs[self.m.TAC & 0x03]
+
+    def update_tima(self, cycles):
+        if not (self.m.TAC & 0x04):  # Check if the timer is enabled
+            return
+
+        tima_cycles = self.get_tima_cycles()
+        self.tima_counter -= cycles
+
+        while self.tima_counter <= 0:
+            self.tima_counter += tima_cycles
+
+            if self.m.TIMA >= 0xFF:
+                self.m.TIMA = self.m.TMA
+                self.request_interrupt(2)  # Request Timer Interrupt (bit 2)
+            else:
+                self.m.TIMA += 1
 
     # INTERRUPTS
+
     def handle_interrupts(self):
-        if not self.IME:
-            return
+        pending_interrupts = self.m.IF & self.m.IE
 
-        interrupt_triggered = self.IF & self.IE
+        # exit halted state if interrupt is pending
+        if self.halted and pending_interrupts:
+            self.halted = False
 
-        if not interrupt_triggered:
-            return
+        # handle interrupts only if IME is set
+        if self.IME and pending_interrupts:
+            self.IME = False
+            self.halted = False
+            self._push_pc()
 
-        self.IME = False
-        self._push(self.PC)
+            for i in range(5):
+                if (pending_interrupts >> i) & 0x1:
+                    self.m.IF &= ~(1 << i)
+                    # print("Interrupt triggered: ", i)
+                    # print("PC before: ", hex(self.PC))
+                    # print("Going to: ", hex(0x0040 + (0x08 * i)))
+                    self.PC = 0x0040 + (0x08 * i)
+                    self.total_cycles += 5
+                    break
 
-        for i in range(5):
-            if (interrupt_triggered >> i) & 0x1:
-                self.IF &= ~(1 << i)
-                self.PC = 0x0040 + (0x08 * i)
-                break
-
-    def request_interrupt(self, interrupt):
-        self.interrupt_flags |= 1 << interrupt
+    def request_interrupt(self, interrupt_num):
+        self.m.IF |= 1 << interrupt_num
 
     def calc_clock_speed(self, start_time, end_time):
         elapsed_time = end_time - start_time
@@ -726,20 +730,38 @@ class CPU:  # 8bit
         else:
             raise ValueError("Invalid flag")
 
-    def execute_next_instruction(self):
-        # print("Executing next instruction")
+    def step(self):
         opcode = self.m.read_byte(self.PC)
+
+        cycles = self.opcodes[opcode][1] if opcode != 0xCB else self.cb_opcodes[self.m.read_byte(
+            self.PC + 1)][1]
+
         if opcode == 0xCB:
             self._cb()
         else:
             self.execute_opcode(opcode)
 
+        self.update_timer(cycles) 
+        return cycles
+    
+    def execute_next_instruction(self):
+        opcode = self.m.read_byte(self.PC)
+
+        cycles = self.opcodes[opcode][1] if opcode != 0xCB else self.cb_opcodes[self.m.read_byte(
+            self.PC + 1)][1]
+
+        if opcode == 0xCB:
+            self._cb()
+        else:
+            self.execute_opcode(opcode)
+
+        self.update_timer(cycles)
+
     def execute_opcode(self, opcode):
-        # breakpoint()
         try:
-            self.save_log_to_file()
-            if self.debug_mode:
-                self.debug()
+            # self.save_log_to_file()
+            # if self.debug_mode:
+            #     self.debug()
             if opcode in self.opcodes:
                 opcode_func, cycles = self.opcodes[opcode]
                 opcode_func(self)
@@ -752,9 +774,9 @@ class CPU:  # 8bit
     def _cb(self):
         try:
             opcode = self.m.read_byte(self.PC + 1)
-            self.save_log_to_file()
-            if self.debug_mode:
-                self.debug()
+            # self.save_log_to_file()
+            # if self.debug_mode:
+            #     self.debug()
             if opcode in self.cb_opcodes:
                 opcode_func, cycles = self.cb_opcodes[opcode]
                 opcode_func(self)
@@ -771,9 +793,10 @@ class CPU:  # 8bit
         self.PC += 1
 
     def _halt(self):  # TODO: implement further
-        self.PC += 1
+        self.halted = True
 
     def _stop(self):  # TODO: implement once input is implemented
+        self.m.DIV = 0x00  # must begin ticking once stop ends
         self.m.read_byte(self.PC)
         self.PC += 1
 
@@ -782,23 +805,29 @@ class CPU:  # 8bit
     def _rlca(self):
         carry = (self.registers["A"] & 0x80) >> 7
         self.registers["A"] = ((self.registers["A"] << 1) & 0xFF) | carry
-        self.registers["F"] = (self.registers["F"] & 0xEF) | (
-            carry << 4)  # Update the carry flag
+        self.set_flag("Z", False)
+        self.set_flag("N", False)
+        self.set_flag("H", False)
+        self.set_flag("C", carry == 1)
         self.PC += 1
 
     def _rrca(self):
         carry = self.registers["A"] & 0x01
         self.registers["A"] = (self.registers["A"] >> 1) | (carry << 7)
-        self.registers["F"] = (self.registers["F"] & 0xEF) | (
-            carry << 4)  # Update the carry flag
+        self.set_flag("Z", False)
+        self.set_flag("N", False)
+        self.set_flag("H", False)
+        self.set_flag("C", carry == 1)
         self.PC += 1
 
     def _rla(self):
         carry = (self.registers["A"] & 0x80) >> 7
         self.registers["A"] = ((self.registers["A"] << 1)
                                & 0xFF) | self.get_flag("C")
-        self.registers["F"] = (self.registers["F"] & 0xEF) | (
-            carry << 4)
+        self.set_flag("Z", False)
+        self.set_flag("N", False)
+        self.set_flag("H", False)
+        self.set_flag("C", carry == 1)
         self.PC += 1
 
     def _rra(self):
@@ -812,13 +841,20 @@ class CPU:  # 8bit
         self.set_flag("C", carry != 0)
         self.PC += 1
 
+    def _ccf(self):
+        self.set_flag("C", not self.get_flag("C"))
+        self.set_flag("N", False)
+        self.set_flag("H", False)
+        self.PC += 1
+
     def _scf(self):
         self.registers["F"] = (self.registers["F"] & 0x90) | 0x10
         self.PC += 1
 
     def _cpl(self):
-        self.registers["A"] = ~self.registers["A"]
-        self.registers["F"] = (self.registers["F"] & 0x10) | 0x60
+        self.registers["A"] = (~self.registers["A"]) & 0xFF
+        self.set_flag("N", True)
+        self.set_flag("H", True)
         self.PC += 1
 
     # LD functions
@@ -863,12 +899,15 @@ class CPU:  # 8bit
 
     def _ld_hl_sp_n(self):
         n = self.m.read_byte(self.PC + 1)
+        n = n - 256 if n > 127 else n  # convert to signed
+        result = (self.SP + n) & 0xFFFF
+        self.registers["H"] = (result >> 8) & 0xFF
+        self.registers["L"] = result & 0xFF
         self.PC += 2
-        self.SP += n
         self.set_flag("Z", False)
         self.set_flag("N", False)
-        self.set_flag("H", (self.SP & 0x0F) < (n & 0x0F))
-        self.set_flag("C", (self.SP & 0xFF) < (n & 0xFF))
+        self.set_flag("H", (self.SP ^ n ^ (result & 0xFFFF)) & 0x10)
+        self.set_flag("C", (self.SP ^ n ^ (result & 0xFFFF)) & 0x100)
 
     def _ld_r_16(self, reg1, reg2, reg3):
         address = self.registers[reg2] << 8 | self.registers[reg3]
@@ -980,7 +1019,7 @@ class CPU:  # 8bit
         self.PC += 1
 
     def _ei(self):
-        self.IME = True
+        self.set_IME_next = True
         self.PC += 1
 
     # INC/DEC functions
@@ -998,28 +1037,28 @@ class CPU:  # 8bit
         self.PC += 1
 
     def _inc_hl(self):
-        address = self.registers["H"] << 8 | self.registers["L"]
-        self.m.write_byte(address, (self.m.read_byte(address) + 1) & 0xFF)
+        address = (self.registers["H"] << 8) | self.registers["L"]
+        val = self.m.read_byte(address)
+        result = (val + 1) & 0xFF
+        self.m.write_byte(address, result)
+
+        # Update flags
+        self.set_flag("Z", result == 0)
+        self.set_flag("N", False)
+        self.set_flag("H", (val & 0xF) + 1 > 0xF)
+
         self.PC += 1
 
-    def _inc_pntrs(self, reg):
-        if self.registers[reg] == "PC":
-            self.PC = (self.PC + 1) & 0xFFFF
-        elif self.registers[reg] == "SP":
-            self.SP = (self.SP + 1) & 0xFFFF
-        else:
-            raise ValueError("Invalid register")
+    def _inc_sp(self):
+        self.SP = (self.SP + 1) & 0xFFFF
+        self.PC += 1
 
-    def _dec_pntrs(self, reg):
-        if self.registers[reg] == "PC":
-            self.PC = (self.PC - 1) & 0xFFFF
-        elif self.registers[reg] == "SP":
-            self.SP = (self.SP - 1) & 0xFFFF
-        else:
-            raise ValueError("Invalid register")
+    def _dec_sp(self):
+        self.SP = (self.SP - 1) & 0xFFFF
+        self.PC += 1
 
     def _dec(self, reg):
-        self.registers[reg] = (self.registers[reg] - 1) & 0xFF
+        self.registers[reg] = (self.registers[reg] - 1) & 0xff
         self.dec_flag(self.registers[reg])
         self.PC += 1
 
@@ -1032,7 +1071,14 @@ class CPU:  # 8bit
 
     def _dec_hl(self):
         address = self.registers["H"] << 8 | self.registers["L"]
-        self.m.write_byte(address, (self.m.read_byte(address) - 1) & 0xFF)
+        value = self.m.read_byte(address)
+        result = (value - 1) & 0xFF
+        self.m.write_byte(address, result)
+
+        self.set_flag("Z", result == 0)
+        self.set_flag("N", True)
+        self.set_flag("H", (value & 0x0F) == 0x00)  # Check for half-carry
+
         self.PC += 1
 
     # ADD functions
@@ -1056,6 +1102,7 @@ class CPU:  # 8bit
 
     def _add_sp_n(self):
         add_val = self.m.read_byte(self.PC + 1)
+        add_val = add_val - 256 if add_val > 127 else add_val  # convert to signed
         original_sp = self.SP
         result = self.SP + add_val
         self.SP = result & 0xFFFF
@@ -1063,8 +1110,9 @@ class CPU:  # 8bit
         self.set_flag("Z", False)
         self.set_flag("N", False)
         self.set_flag("H", (original_sp ^ add_val ^
-                      (result & 0xFFFF)) & 0x1000)
-        self.set_flag("C", result > 0xFFFF)
+                      (result & 0xFFFF)) & 0x10)
+        self.set_flag("C", (original_sp ^ add_val ^
+                      (result & 0xFFFF)) & 0x100)
 
     def _add_16_16(self, reg1, reg2, reg3, reg4):
         og_val1 = self.registers[reg1] << 8 | self.registers[reg2]
@@ -1074,7 +1122,7 @@ class CPU:  # 8bit
         self.registers[reg1] = (result >> 8) & 0xFF
         self.registers[reg2] = result & 0xFF
         self.PC += 1
-        self.ADD_16_16_Flags(og_val1, og_val2, result)
+        self.ADD_16_16_Flags(og_val1, og_val2)
 
     def _add_16_sp(self, reg1, reg2):
         og_val1 = self.registers[reg1] << 8 | self.registers[reg2]
@@ -1084,7 +1132,7 @@ class CPU:  # 8bit
         self.registers[reg1] = (result >> 8) & 0xFF
         self.registers[reg2] = result & 0xFF
         self.PC += 1
-        self.ADD_16_16_Flags(og_val1, og_val2, result)
+        self.ADD_16_16_Flags(og_val1, og_val2)
 
     def _add_a_hl(self):
         og_val = self.registers["A"]
@@ -1095,11 +1143,12 @@ class CPU:  # 8bit
         self.PC += 1
         self.add_flags(og_val, add_val, result)
 
-    def ADD_16_16_Flags(self, og_val1, og_val2, result):
+    def ADD_16_16_Flags(self, og_val1, og_val2):
         self.set_flag("N", False)
         self.set_flag("H", (og_val1 & 0xFFF) + (og_val2 & 0xFFF)
                       > 0xFFF)  # Check if half-carry occurred
-        self.set_flag("C", result > 0xFFFF)  # Check if carry occurred
+        # Check if carry occurred
+        self.set_flag("C", (og_val1 + og_val2) > 0xFFFF)
 
     # ADC functions
 
@@ -1113,9 +1162,9 @@ class CPU:  # 8bit
 
     def _adc_from_16(self, reg1, reg2, reg3):
         og_val = self.registers[reg1]
-        add_val = self.registers[reg2] << 8 | self.registers[reg3]
-        result = self.registers[reg1] + \
-            self.m.read_byte(add_val) + self.get_flag("C")
+        address = self.registers[reg2] << 8 | self.registers[reg3]
+        add_val = self.m.read_byte(address)
+        result = self.registers[reg1] + add_val + self.get_flag("C")
         self.registers[reg1] = result & 0xFF
         self.add_flags_c(og_val, add_val, result)
         self.PC += 1
@@ -1190,7 +1239,8 @@ class CPU:  # 8bit
         self.sub_flags_c(og_val, sub_val, result)
 
     def sub_flags_c(self, og_val, sub_val, result):
-        self.set_flag("Z", result == 0)
+        masked_result = result & 0xFF
+        self.set_flag("Z", masked_result == 0)
         self.set_flag("N", True)
         self.set_flag("H", (og_val & 0xF) - (sub_val & 0xF) -
                       self.get_flag("C") < 0)
@@ -1290,10 +1340,12 @@ class CPU:  # 8bit
         if self.get_flag("C"):
             self.PC = self.m.read_word(self.SP)
             self.SP += 2
+        else:
+            self.PC += 1
 
     def _ret(self):
-        high = self.m.read_byte(self.SP + 1)
         low = self.m.read_byte(self.SP)
+        high = self.m.read_byte(self.SP + 1)
         self.PC = (high << 8) | low
         self.SP += 2
 
@@ -1321,6 +1373,11 @@ class CPU:  # 8bit
         self.m.write_byte(self.SP + 1, self.registers[reg1])
         self.PC += 1
 
+    def _push_pc(self):
+        self.SP -= 2
+        self.m.write_byte(self.SP, self.PC & 0xFF)
+        self.m.write_byte(self.SP + 1, self.PC >> 8)
+
     # JP functions
 
     def _jp_nz(self):
@@ -1334,21 +1391,21 @@ class CPU:  # 8bit
 
     def _jp_z_nn(self):
         if self.get_flag("Z"):
-            self.PC = self.m.read_word(self.PC)
+            self.PC = self.m.read_word(self.PC + 1)
         else:
-            self.PC += 2
+            self.PC += 3
 
     def _jp_nc_nn(self):
         if not self.get_flag("C"):
-            self.PC = self.m.read_word(self.PC)
+            self.PC = self.m.read_word(self.PC + 1)
         else:
-            self.PC += 2
+            self.PC += 3
 
     def _jp_c_nn(self):
         if self.get_flag("C"):
-            self.PC = self.m.read_word(self.PC)
+            self.PC = self.m.read_word(self.PC + 1)
         else:
-            self.PC += 2
+            self.PC += 3
 
     def _jp_hl(self):
         self.PC = self.registers["H"] << 8 | self.registers["L"]
@@ -1396,7 +1453,7 @@ class CPU:  # 8bit
 
     def _rst(self, addr):
         self.SP -= 2
-        self.m.write_word(self.SP, self.PC)
+        self.m.write_word(self.SP, self.PC + 1)
         self.PC = addr
 
     # LDH functions
@@ -1427,19 +1484,26 @@ class CPU:  # 8bit
 
     # RLC/RRC functions
     def _rlc(self, reg):
-        self.set_flag("C", self.registers[reg] & 0x80)
-        self.registers[reg] = ((self.registers[reg] << 1)
-                               & 0xFF) | (self.get_flag("C") >> 7)
+        highest_bit = (self.registers[reg] & 0x80) >> 7
+        self.registers[reg] = ((self.registers[reg] << 1) & 0xFF) | highest_bit
         self.rl_rr_flags(self.registers[reg])
+        self.set_flag("C", highest_bit == 1)
         self.PC += 1
 
     def _rlc_hl(self):
-        self.set_flag("C", self.m.read_byte(
-            self.registers["H"] << 8 | self.registers["L"]) & 0x80)
-        self.m.write_byte(self.registers["H"] << 8 | self.registers["L"], ((self.m.read_byte(self.registers["H"] << 8 | self.registers["L"]) << 1)
-                                                                           & 0xFF) | (self.get_flag("C") >> 7))
-        self.rl_rr_flags(self.m.read_byte(
-            self.registers["H"] << 8 | self.registers["L"]))
+        address = (self.registers["H"] << 8) | self.registers["L"]
+        val = self.m.read_byte(address)
+        carry = (val & 0x80) >> 7
+
+        result = ((val << 1) & 0xFF) | carry
+        self.m.write_byte(address, result)
+
+        # Update flags
+        self.set_flag("Z", result == 0)
+        self.set_flag("N", False)
+        self.set_flag("H", False)
+        self.set_flag("C", carry != 0)
+
         self.PC += 1
 
     def _rrc(self, reg):
@@ -1575,13 +1639,20 @@ class CPU:  # 8bit
         self.PC += 1
 
     def _res_hl(self, bit):
-        self.m.write_byte(self.registers["H"] << 8 | self.registers["L"], self.m.read_byte(
-            self.registers["H"] << 8 | self.registers["L"]) & ~(1 << bit))
+        hl_address = (self.registers["H"] << 8) | self.registers["L"]
+        value = self.m.read_byte(hl_address)
+        value &= ~(1 << bit)
+        self.m.write_byte(hl_address, value)
         self.PC += 1
 
     # SET functions
     def _set(self, bit, reg):
         self.registers[reg] |= (1 << bit)
+        self.PC += 1
+
+    def _set_hl(self, bit):
+        self.m.write_byte(self.registers["H"] << 8 | self.registers["L"], self.m.read_byte(
+            self.registers["H"] << 8 | self.registers["L"]) | (1 << bit))
         self.PC += 1
 
     def _def_hl(self, bit):
